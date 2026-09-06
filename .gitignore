@@ -1,0 +1,15 @@
+*
+
+!.gitignore
+!skills/
+!skills/**
+!skills-manager/
+!skills-manager/**
+
+# This junction is managed by the smtp-mailer repository.
+/skills/smtp-mailer
+
+# Local build and test artifacts.
+**/__pycache__/
+**/*.py[cod]
+**/node_modules/

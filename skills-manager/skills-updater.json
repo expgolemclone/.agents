@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "frontend-designer": {
+      "repository": "kozz36/frontend-designer-skill",
+      "ref": "main",
+      "source_path": "skills/frontend-designer",
+      "include": [],
+      "license_path": "LICENSE"
+    },
+    "minimax-xlsx": {
+      "repository": "MiniMax-AI/skills",
+      "ref": "main",
+      "source_path": "skills/minimax-xlsx",
+      "include": [],
+      "license_path": "LICENSE"
+    },
+    "ux-flow-designer": {
+      "repository": "ThomasPraun/ux-flow-designer",
+      "ref": "main",
+      "source_path": "",
+      "include": [
+        "SKILL.md",
+        "assets",
+        "references"
+      ],
+      "license_path": "LICENSE"
+    }
+  }
+}

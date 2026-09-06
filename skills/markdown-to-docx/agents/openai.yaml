@@ -1,0 +1,4 @@
+interface:
+  display_name: "Markdown to DOCX"
+  short_description: "Convert Markdown or Customine XLSX to verified DOCX"
+  default_prompt: "Use $markdown-to-docx to convert Markdown or a Customine XLSX export into a verified DOCX report."
