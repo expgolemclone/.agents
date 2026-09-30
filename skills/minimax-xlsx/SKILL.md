@@ -14,6 +14,10 @@ metadata:
 
 Handle the request directly. Do NOT spawn sub-agents. Always write the output file the user requests.
 
+For bundled Python scripts, run `uv sync --project SKILL_DIR` once, then use
+`uv run --project SKILL_DIR python SKILL_DIR/scripts/<script>.py` in place of
+the `python3` examples below. Dependencies are declared in `pyproject.toml`.
+
 ## Task Routing
 
 | Task | Method | Guide |

@@ -38,7 +38,7 @@ def detect_and_load(file_path: str, sheet_name_filter: str | None = None) -> dic
         import pandas as pd
     except ImportError:
         raise RuntimeError(
-            "pandas is not installed. Run: pip install pandas openpyxl"
+            "pandas is not installed. Run: uv sync --project SKILL_DIR, then run this script with uv run --project SKILL_DIR python."
         )
 
     path = Path(file_path)
