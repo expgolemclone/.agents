@@ -1,6 +1,9 @@
 *
 
 !.gitignore
+!AGENTS.md
+!settings.json
+!README.md
 !skills/
 !skills/**
 !skills-manager/
