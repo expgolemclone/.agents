@@ -1,6 +1,6 @@
 ---
 name: markdown-to-docx
-description: Convert local Markdown files or Customine-exported XLSX workbooks into verified Microsoft Word DOCX documents, including structured tables, nested lists, Word-pasted raster images, and selected Customine sheets, pages, actions, TODOs, edit details, or results. Use when Codex needs to create or update a DOCX from Markdown or prepare a faithful Word report from a Customine workbook.
+description: Convert local Markdown files or Customine-exported XLSX workbooks into verified Microsoft Word DOCX documents, including structured tables, nested lists, Word-pasted raster images, and selected Customine sheets, pages, actions, TODOs, edit details, or results. Use when the agent needs to create or update a DOCX from Markdown or prepare a faithful Word report from a Customine workbook.
 ---
 
 # Markdown and Customine XLSX to DOCX

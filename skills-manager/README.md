@@ -1,6 +1,6 @@
 # Skills Manager
 
-GitHub上の外部Codex skillを, 同じ `.agents` repo内の `skills` folderへ同期するmanagerです.
+GitHub上の外部Agent Skillを, 同じ `.agents` repo内の `skills` folderへ同期するmanagerです.
 
 ## Files
 

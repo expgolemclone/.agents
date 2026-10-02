@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synchronize JSON-configured Codex skills with their GitHub sources."""
+"""Synchronize JSON-configured Agent Skills with their GitHub sources."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ import zipfile
 
 API_ROOT = "https://api.github.com"
 ARCHIVE_ROOT = "https://codeload.github.com"
-USER_AGENT = "codex-skills-updater/1"
+USER_AGENT = "agent-skills-updater/1"
 CONFIG_SCHEMA_VERSION = 1
 LOCK_SCHEMA_VERSION = 1
 TARGET_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
