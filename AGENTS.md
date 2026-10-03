@@ -38,6 +38,9 @@
 
 - 作業開始時にremoteの最新状態を取得し, localより進んでいればlocalにも反映する. plan modeでも実施. 古い前提でplanしない.
 - working copyに既存の変更があれば, 今回の変更とは分けてcommitし, 先にpushする.
+- commit messageはConventional Commitsに従い, `<type>[optional scope][!]: <description>` とする.
+  - typeは `feat`, `fix`, `docs`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert` などを使う. scopeは必要な場合のみ付ける.
+  - 破壊的変更は `!` または本文末尾の `BREAKING CHANGE: <description>` で明示する.
 - 作業終了後はpushし, localとremoteのbookmarkが `main` のみであることを確認する.
   - `main` 以外のbookmarkやbranchの扱いに迷う場合はuserに質問する.
   - expgolemclone 以外のuserのrepositoryにpushしない.
