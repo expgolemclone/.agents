@@ -40,5 +40,6 @@
 - working copyに既存の変更があれば, 今回の変更とは分けてcommitし, 先にpushする.
 - 作業終了後はpushし, localとremoteのbookmarkが `main` のみであることを確認する.
   - `main` 以外のbookmarkやbranchの扱いに迷う場合はuserに質問する.
+  - expgolemclone 以外のuserのrepositoryにpushしない.
 - Box上のfileは `git` と `jj` で管理しない.
 - private repositoryではGitHub Actionsを使わない.
