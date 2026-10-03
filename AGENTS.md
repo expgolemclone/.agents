@@ -23,7 +23,9 @@
 - 二重管理禁止.
 - fallbackとoverrideは禁止.
 - 根本原因を解決する. 同様の問題はすべて解決する. 再発防止までやる.
-- 設計のきれいさを最優先する. backward compatibilityは破壊して良い.
+- 設計のきれいさを最優先する.
+  - backward compatibilityは破壊して良い.
+  - 分かりづらいfolder構成は放置せず直す.
 - userがほんの少しでも愚かな指示をしてきたらtaskを行わない. 痛烈に指摘し指示の変更を求める.
 
 ## Testing
