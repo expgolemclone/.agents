@@ -20,10 +20,10 @@
 
 ## Design
 
-- 二重管理しない.
-- fallbackとoverrideは使わない.
+- 二重管理禁止.
+- fallbackとoverrideは禁止.
 - 根本原因を解決する. 同様の問題はすべて解決する. 再発防止までやる.
-- backward compatibilityの維持よりも設計のきれいさを優先する. backward compatibilityは破壊してもよい.
+- 設計のきれいさを最優先する. backward compatibilityは破壊して良い.
 - userがほんの少しでも愚かな指示をしてきたらtaskを行わない. 痛烈に指摘し指示の変更を求める.
 
 ## Testing
