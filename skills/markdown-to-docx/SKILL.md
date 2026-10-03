@@ -5,7 +5,7 @@ description: Convert local Markdown files or Customine-exported XLSX workbooks i
 
 # Markdown and Customine XLSX to DOCX
 
-Use the bundled deterministic CLIs. Require Node.js 22.18 or newer and run `npm ci` in this skill directory when dependencies are not installed. DOCX image synchronization and rendered QA require Python, Pillow, LibreOffice, and PyMuPDF.
+Use the bundled deterministic CLIs. Require Node.js 22.18 or newer and install shared dependencies with `pwsh -NoProfile -File C:/dev/settings/envx/runtimes/manage.ps1 -Operation Install`. Never install packages in this skill directory. DOCX image synchronization and rendered QA require the shared Python, Pillow, LibreOffice, and PyMuPDF.
 
 ## Choose the workflow
 

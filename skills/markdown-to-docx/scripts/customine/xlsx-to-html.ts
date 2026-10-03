@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { pythonExecutable } from "@expgolemclone/envx-runtime";
 import {
   existsSync,
   mkdirSync,
@@ -70,7 +71,7 @@ export function resolveLibreOffice(): string {
 }
 
 function resolvePython(): string {
-  return requiredExecutableFromEnvironment("PYTHON_PATH") ?? "python";
+  return pythonExecutable();
 }
 
 function waitForNonEmptyFile(filePath: string, timeoutMilliseconds = 15_000): void {

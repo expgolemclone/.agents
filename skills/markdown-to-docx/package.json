@@ -11,10 +11,10 @@
     "test": "node --test tests/*.test.ts"
   },
   "dependencies": {
-    "parse5": "8.0.0"
+    "parse5": "8.0.1"
   },
   "devDependencies": {
-    "@types/node": "^22.15.29",
-    "typescript": "^5.8.3"
+    "@types/node": "26.6.4",
+    "typescript": "7.0.2"
   }
 }

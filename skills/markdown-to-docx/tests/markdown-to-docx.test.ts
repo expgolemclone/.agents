@@ -12,6 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
+import { pythonExecutable } from '@expgolemclone/envx-runtime';
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -36,7 +37,9 @@ const ONE_PIXEL_PNG = Buffer.from(
 async function withTempDirectory(
   run: (directory: string) => void | Promise<void>,
 ): Promise<void> {
-  const directory = mkdtempSync(path.join(tmpdir(), "markdown-to-docx-test-"));
+  const root = process.platform === 'win32' ? 'C:/dev/tmp' : tmpdir();
+  mkdirSync(root, { recursive: true });
+  const directory = mkdtempSync(path.join(root, "markdown-to-docx-test-"));
   try {
     await run(directory);
   } finally {
@@ -91,7 +94,7 @@ function replaceDocxPngWithJpeg(docxPath: string): void {
     "        zout.writestr(name, data)",
     "os.replace(temporary, source)",
   ].join("\n");
-  const converted = spawnSync("python", ["-c", script, docxPath], {
+  const converted = spawnSync(pythonExecutable(), ["-c", script, docxPath], {
     encoding: "utf8",
     windowsHide: true,
   });
@@ -746,7 +749,7 @@ test("black-box renderer returns compact JSON and one PNG path per page", { time
     const outputPath = path.join(localizedDirectory, "render.docx");
     synchronizeMarkdownToDocx(VISUAL_FIXTURE_PATH, outputPath);
 
-    const rendered = spawnSync("python", [RENDER_CLI_PATH, outputPath], {
+    const rendered = spawnSync(pythonExecutable(), [RENDER_CLI_PATH, outputPath], {
       cwd: SKILL_DIRECTORY,
       encoding: "utf8",
       timeout: 120_000,

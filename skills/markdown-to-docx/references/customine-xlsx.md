@@ -2,7 +2,7 @@
 
 Convert a Customine-exported XLSX workbook into a DOCX report without redesigning its selected content as a generic summary table. Use the bundled CLIs for conversion and selection because these steps preserve workbook presentation and action boundaries.
 
-Require LibreOffice and Python with PyMuPDF in addition to the dependencies in the parent skill. On Windows, LibreOffice is resolved from `%ProgramFiles%\LibreOffice\program\soffice.com`. Set `LIBREOFFICE_PATH` or `PYTHON_PATH` to an explicit absolute executable only for a non-default installation.
+Require LibreOffice and Python with PyMuPDF in addition to the dependencies in the parent skill. On Windows, LibreOffice is resolved from `%ProgramFiles%\LibreOffice\program\soffice.com`. Python is resolved from the shared runtime. `PYTHON_PATH` is not supported.
 
 ## 1. Convert and inspect
 

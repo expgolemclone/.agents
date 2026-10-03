@@ -14,7 +14,7 @@ from pathlib import Path
 from zipfile import BadZipFile, ZipFile
 
 try:
-    import fitz
+    import pymupdf
 except ImportError as error:
     raise SystemExit("PyMuPDF is required to render DOCX pages.") from error
 
@@ -101,24 +101,30 @@ def convert_to_pdf(docx_path: Path, conversion_directory: Path, profile: Path) -
 
 
 def rasterize(pdf_path: Path) -> tuple[Path, list[Path]]:
-    output_directory = Path(tempfile.mkdtemp(prefix="markdown-to-docx-render-"))
+    output_directory = Path(tempfile.mkdtemp(prefix="markdown-to-docx-render-", dir=temporary_root()))
     pages: list[Path] = []
     scale = RENDER_DPI / 72
-    with fitz.open(pdf_path) as document:
+    with pymupdf.open(pdf_path) as document:
         if document.page_count < 1:
             raise RuntimeError(f"Rendered PDF has no pages: {pdf_path}")
         for page_number, page in enumerate(document, start=1):
             output_path = output_directory / f"page-{page_number}.png"
-            pixmap = page.get_pixmap(matrix=fitz.Matrix(scale, scale), alpha=False)
+            pixmap = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False)
             pixmap.save(output_path)
             pages.append(output_path)
     return output_directory, pages
 
 
+def temporary_root() -> Path:
+    root = Path("C:/dev/tmp") if sys.platform == "win32" else Path(tempfile.gettempdir())
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
 def render_docx(input_path: str) -> dict[str, object]:
     docx_path = validate_docx(input_path)
-    with tempfile.TemporaryDirectory(prefix="markdown-to-docx-profile-") as profile_text:
-        with tempfile.TemporaryDirectory(prefix="markdown-to-docx-pdf-") as conversion_text:
+    with tempfile.TemporaryDirectory(prefix="markdown-to-docx-profile-", dir=temporary_root()) as profile_text:
+        with tempfile.TemporaryDirectory(prefix="markdown-to-docx-pdf-", dir=temporary_root()) as conversion_text:
             profile = Path(profile_text).resolve()
             conversion_directory = Path(conversion_text).resolve()
             pdf_path = convert_to_pdf(docx_path, conversion_directory, profile)
@@ -133,6 +139,8 @@ def render_docx(input_path: str) -> dict[str, object]:
 
 
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(
         description="Render a DOCX to temporary page PNGs and print one JSON result."
     )
