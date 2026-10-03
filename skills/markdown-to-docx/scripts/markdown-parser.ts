@@ -1,4 +1,4 @@
-import { markdownInlinePlainText } from "./inline-markdown.ts";
+import { findInlineCodeSpan, markdownInlinePlainText } from "./inline-markdown.ts";
 import {
   parseCssDeclarations,
   parseHtmlRgbColor,
@@ -176,7 +176,6 @@ export function splitTableRow(line: string): string[] {
   }
   const cells: string[] = [];
   let current = "";
-  let inCode = false;
   for (let index = 0; index < source.length; index += 1) {
     const character = source[index]!;
     if (character === "\\" && index + 1 < source.length) {
@@ -185,18 +184,19 @@ export function splitTableRow(line: string): string[] {
       continue;
     }
     if (character === "`") {
-      inCode = !inCode;
-      current += character;
+      const span = findInlineCodeSpan(source, index);
+      if (!span) throw new SyntaxError("Pipe table row contains an unclosed inline code span.");
+      current += source.slice(index, span.end);
+      index = span.end - 1;
       continue;
     }
-    if (character === "|" && !inCode) {
+    if (character === "|") {
       cells.push(current.trim());
       current = "";
       continue;
     }
     current += character;
   }
-  if (inCode) throw new SyntaxError("Pipe table row contains an unclosed inline code span.");
   cells.push(current.trim());
   return cells;
 }
@@ -580,8 +580,7 @@ export function parseMarkdown(
   let activeFenceStartLine: number | undefined;
   let code: string[] = [];
   let nextListId = 1;
-  let activeListIds: Partial<Record<ListKind, number>> = {};
-  let activeListStarts: Partial<Record<ListKind, number>> = {};
+  let activeLists: Array<{ kind: ListKind; id: number; start: number } | undefined> = [];
 
   const flushParagraph = (): void => {
     if (pending.length > 0) {
@@ -597,8 +596,7 @@ export function parseMarkdown(
     }
   };
   const resetLists = (): void => {
-    activeListIds = {};
-    activeListStarts = {};
+    activeLists = [];
   };
 
   for (let index = 0; index < lines.length; index += 1) {
@@ -735,16 +733,20 @@ export function parseMarkdown(
       flushParagraph();
       const listKind: ListKind = /^\d/.test(list[2]!) ? "ordered" : "bullet";
       const start = listKind === "ordered" ? Number.parseInt(list[2]!, 10) : 1;
-      activeListIds[listKind] ??= nextListId++;
-      activeListStarts[listKind] ??= start;
+      const level = listLevel(list[1]!, index + 1);
+      activeLists.length = level + 1;
+      if (activeLists[level]?.kind !== listKind) {
+        activeLists[level] = { kind: listKind, id: nextListId++, start };
+      }
+      const activeList = activeLists[level]!;
       const task = /^\[([ xX])\]\s+(.+)$/.exec(list[3]!);
       result.push({
         kind: "list",
         text: task ? `${task[1]!.toLowerCase() === "x" ? "☑" : "☐"} ${task[2]!}` : list[3]!.trim(),
-        level: listLevel(list[1]!, index + 1),
+        level,
         listKind,
-        listId: activeListIds[listKind]!,
-        start: activeListStarts[listKind]!,
+        listId: activeList.id,
+        start: activeList.start,
         sourceStartLine: index,
         sourceEndLine: index,
       });

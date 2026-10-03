@@ -107,6 +107,37 @@ test("extractor rejects unsupported presentation values instead of dropping them
   );
 });
 
+test("extractor rejects unsupported content and CSS instead of silently deleting them", () => {
+  for (const content of [
+    '<img src="screenshot.png" alt="Evidence">',
+    '<a href="https://example.test">Link</a>',
+    '<u>Underlined</u>',
+    '<span style="color:#FF0000">Red</span>',
+    '<font style="color:#FF0000">Red</font>',
+    '<b title="hidden">Bold</b>',
+    '<span class="red">Red</span>',
+    '<p>Paragraph</p>',
+  ]) {
+    assert.throws(() => extractTablesFromHtml(`<table><tr><td>${content}</td></tr></table>`), /Unsupported/);
+  }
+  assert.throws(() => extractTablesFromHtml('<img src="floating.png"><table><tr><td>A</td></tr></table>'), /Unsupported <img>/);
+  assert.throws(() => extractTablesFromHtml('<table style="color:#FF0000"><tr><td>A</td></tr></table>'), /Unsupported style/);
+  const tables = extractTablesFromHtml('<table><tr><td><font face="Yu Gothic" size="2" color="#FF0000"><span><b>Red</b></span></font></td></tr></table>');
+  assert.equal(tables[0]!.rows[0]!.cells[0]!.textColor, "#FF0000");
+  assert.match(renderSelectionsToMarkdown(tables, [{ tableId: "table0" }]), /\*\*Red\*\*/);
+});
+
+test("extractor round-trips rows fully occupied by rowspan", () => {
+  const tables = extractTablesFromHtml('<table><tr><td rowspan="3" colspan="2">A</td></tr><tr></tr><tr></tr></table>');
+  assert.equal(tables[0]!.rows.length, 3);
+  assert.equal(tables[0]!.rows[1]!.cells.length, 0);
+  const blocks = parseMarkdown(renderSelectionsToMarkdown(tables, [{ tableId: "table0" }]));
+  const table = blocks.find((block) => block.kind === "table");
+  assert.ok(table && table.kind === "table");
+  assert.equal(table.table.rows[2]!.cells[0]!.verticalMerge, "continue");
+  assert.throws(() => renderSelectionsToMarkdown(tables, [{ tableId: "table0", startRow: 2, endRow: 3 }]), /cuts through rowspan/);
+});
+
 test("row selections reject cuts through rowspan", () => {
   const tables = extractTablesFromHtml([
     '<a name="table0"><h1>Sheet 1: Page</h1></a>',

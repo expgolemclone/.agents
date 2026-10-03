@@ -46,6 +46,20 @@ test("inline Markdown has one token stream for rendering and plain text", () => 
   assert.equal(escapeMarkdownText("a*b\\c"), "a\\*b\\\\c");
 });
 
+test("inline code preserves literal backslashes and matching backtick delimiters", () => {
+  for (const [source, text] of [
+    ["`a\\*b`", "a\\*b"],
+    ["`C:\\temp\\file`", "C:\\temp\\file"],
+    ["`\\\\ \\`", "\\\\ \\"],
+    ["`` a`b\\*c ``", "a`b\\*c"],
+    ["`   `", "   "],
+    ["`a\nb`", "a b"],
+  ]) {
+    assert.deepEqual(tokenizeInlineMarkdown(source!), [{ kind: "code", text }]);
+  }
+  assert.deepEqual(tokenizeInlineMarkdown("\\`literal\\`"), [{ kind: "text", text: "`literal`" }]);
+});
+
 test("table cell style parsing normalizes colors and borders", () => {
   assert.deepEqual(
     parseTableCellStyle(
@@ -95,6 +109,21 @@ test("table grid materializes spans and exposes origin coordinates", () => {
   assert.equal(rows[1]![1]!.originRow, 0);
   assert.equal(rows[1]![2]!.cell.id, "E");
   assert.equal(rows[1]![2]!.originColumn, 2);
+});
+
+test("table grid accepts fully spanned rows but still rejects uncovered cells", () => {
+  const grid = buildTableGrid([
+    { cells: [cell("A", 2, 3)] },
+    { cells: [] },
+    { cells: [] },
+  ], "in table0");
+  const rows = requireCompleteTableGrid(grid, 2, "in table0");
+  assert.equal(rows[2]![1]!.cell.id, "A");
+  const incomplete = buildTableGrid([
+    { cells: [cell("A", 1, 2), cell("B")] },
+    { cells: [] },
+  ], "in table0");
+  assert.throws(() => requireCompleteTableGrid(incomplete, 2, "in table0"), /grid is incomplete/);
 });
 
 test("table grid rejects invalid, overlapping, out-of-range, and incomplete spans", () => {

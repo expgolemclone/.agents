@@ -202,9 +202,9 @@ test("parseMarkdown creates typed blocks for the supported Markdown surface", ()
     })),
     [
       { kind: "bullet", level: 0, id: 1, start: 1, text: "bullet" },
-      { kind: "bullet", level: 1, id: 1, start: 1, text: "☑ task" },
-      { kind: "ordered", level: 0, id: 2, start: 3, text: "ordered" },
-      { kind: "ordered", level: 0, id: 2, start: 3, text: "next" },
+      { kind: "bullet", level: 1, id: 2, start: 1, text: "☑ task" },
+      { kind: "ordered", level: 0, id: 3, start: 3, text: "ordered" },
+      { kind: "ordered", level: 0, id: 3, start: 3, text: "next" },
     ],
   );
 });
@@ -455,6 +455,42 @@ test("renderDocx writes real numbering, merged cells, links, and styles", () => 
   assert.match(zipXml(buffer, "word/styles.xml"), /w:styleId="Heading4"/);
 });
 
+test("nested ordered lists keep their starts and restart under each parent", () => {
+  const blocks = parseMarkdown([
+    "- Parent", "  3. Child three", "  4. Child four",
+    "- Other parent", "  7. Child seven", "  8. Child eight",
+    "1. Ordered parent", "  5. Child five", "  6. Child six",
+    "2. Next parent", "  1. Child one",
+  ].join("\n"));
+  const lists = blocks.filter((block) => block.kind === "list");
+  for (const [first, second] of [[1, 2], [4, 5], [7, 8]]) {
+    assert.equal(lists[first!]!.listId, lists[second!]!.listId);
+  }
+  assert.equal(new Set([lists[1]!.listId, lists[4]!.listId, lists[7]!.listId, lists[10]!.listId]).size, 4);
+  assert.equal(lists[6]!.listId, lists[9]!.listId);
+  const numbering = zipXml(renderDocx(blocks, process.cwd()), "word/numbering.xml");
+  for (const index of [1, 4, 7]) {
+    const child = lists[index]!;
+    assert.match(numbering, new RegExp(`<w:num w:numId="${child.listId}"><w:abstractNumId w:val="1"/><w:lvlOverride w:ilvl="1"><w:startOverride w:val="${child.start}"/>`));
+  }
+});
+
+test("fully spanned HTML rows produce valid continuation cells", () => {
+  const table = parseHtmlTable('<table><tr><td colspan="2" rowspan="3">A</td></tr><tr></tr><tr></tr></table>', 1);
+  assert.equal(table.rows.length, 3);
+  assert.deepEqual(table.rows.map((row) => row.cells[0]!.verticalMerge), ["restart", "continue", "continue"]);
+  assert.ok(table.rows.every((row) => row.cells[0]!.colSpan === 2));
+  const document = zipXml(renderDocx([{ kind: "table", table }], process.cwd()), "word/document.xml");
+  assert.equal(document.match(/<w:vMerge w:val="continue"\/>/g)?.length, 2);
+});
+
+test("renderDocx preserves backslashes inside inline code and pipe-table code spans", () => {
+  const blocks = parseMarkdown('`a\\*b`\n\n| Value | Code |\n| --- | --- |\n| literal | ``a`b\\*c|d`` |');
+  const document = zipXml(renderDocx(blocks, process.cwd()), "word/document.xml");
+  assert.ok(document.includes('>a\\*b</w:t>'));
+  assert.ok(document.includes('>a`b\\*c|d</w:t>'));
+});
+
 test("renderDocx scales heading typography from the list hierarchy", () => {
   const blocks = parseMarkdown(
     ["# First", "## Second", "### Third", "#### Fourth"].join("\n"),
@@ -562,6 +598,45 @@ test("synchronizeMarkdownToDocx resolves PNG images relative to the Markdown fil
     assert.equal(buffer.subarray(0, 2).toString("ascii"), "PK");
     assert.deepEqual(storedZipEntry(buffer, "word/media/image1.png"), ONE_PIXEL_PNG);
     assert.match(zipXml(buffer, "word/document.xml"), /descr="One pixel"/);
+  }));
+
+test("absolute local PNG paths work in conversion and image synchronization", () =>
+  withTempDirectory((directory) => {
+    const seedPath = path.join(directory, "seed.png");
+    const inputPath = path.join(directory, "report.md");
+    const outputPath = path.join(directory, "report.docx");
+    writeFileSync(seedPath, ONE_PIXEL_PNG);
+    for (const imagePath of [seedPath, seedPath.replace(/\\/g, "/")]) {
+      rmSync(outputPath, { force: true });
+      writeFileSync(inputPath, `Before\n\n![Existing](${imagePath})\n\n![Missing](${imagePath})\n\nAfter`);
+      synchronizeMarkdownToDocx(inputPath, outputPath);
+      writeFileSync(inputPath, `Before\n\n![Existing](${imagePath})\n\nAfter`);
+      const result = synchronizeMarkdownToDocx(inputPath, outputPath);
+      assert.equal(result.importedImagePaths.length, 1);
+      assert.equal(zipXml(readFileSync(outputPath), "word/document.xml").match(/<w:drawing>/g)?.length, 2);
+    }
+    for (const imagePath of ["https://example.test/image.png", "data:image/png;base64,AAAA", "file:///image.png"]) {
+      assert.throws(() => renderDocx(parseMarkdown(`![Remote](${imagePath})`), directory), /Remote and data/);
+    }
+  }));
+
+test("repeated drawings and many hyperlinks have unique document identifiers", () =>
+  withTempDirectory((directory) => {
+    writeFileSync(path.join(directory, "seed.png"), ONE_PIXEL_PNG);
+    const markdown = [
+      "![First](seed.png)",
+      Array.from({ length: 1001 }, (_, index) => `[Link ${index}](https://example.test/${index})`).join(" "),
+      "![Second](seed.png)",
+    ].join("\n\n");
+    const buffer = renderDocx(parseMarkdown(markdown), directory);
+    const document = zipXml(buffer, "word/document.xml");
+    const ids = [...document.matchAll(/<wp:docPr id="(\d+)"/g)].map((match) => match[1]);
+    assert.equal(ids.length, 2);
+    assert.equal(new Set(ids).size, 2);
+    const relationships = zipXml(buffer, "word/_rels/document.xml.rels");
+    const relationshipIds = [...relationships.matchAll(/<Relationship Id="([^"]+)"/g)].map((match) => match[1]);
+    assert.equal(new Set(relationshipIds).size, relationshipIds.length);
+    assert.equal(relationships.match(/Type="[^"]+\/image"/g)?.length, 1);
   }));
 
 test("conversion rejects an invalid existing DOCX without changing either source file", () =>
@@ -690,6 +765,44 @@ test("ambiguous DOCX image placement fails before changing Markdown, images, or 
     assert.equal(readFileSync(inputPath, "utf8"), markdown);
     assert.deepEqual(readFileSync(outputPath), originalDocx);
     assert.equal(existsSync(path.join(directory, "images")), false);
+  }));
+
+test("duplicate nearby anchors cannot be bypassed by distant unique anchors", () =>
+  withTempDirectory((directory) => {
+    const inputPath = path.join(directory, "report.md");
+    const outputPath = path.join(directory, "report.docx");
+    writeFileSync(path.join(directory, "seed.png"), ONE_PIXEL_PNG);
+    writeFileSync(inputPath, "Start\n\nRepeated\n\n![Image](seed.png)\n\nRepeated\n\nEnd");
+    synchronizeMarkdownToDocx(inputPath, outputPath);
+    const markdown = "Start\n\nRepeated\n\nRepeated\n\nEnd";
+    writeFileSync(inputPath, markdown);
+    const originalDocx = readFileSync(outputPath);
+    assert.throws(() => synchronizeMarkdownToDocx(inputPath, outputPath), /maps uniquely/);
+    assert.equal(readFileSync(inputPath, "utf8"), markdown);
+    assert.deepEqual(readFileSync(outputPath), originalDocx);
+    assert.equal(existsSync(path.join(directory, "images")), false);
+  }));
+
+test("extra Markdown anchors make a DOCX image gap ambiguous", () =>
+  withTempDirectory((directory) => {
+    const inputPath = path.join(directory, "report.md");
+    const outputPath = path.join(directory, "report.docx");
+    writeFileSync(path.join(directory, "seed.png"), ONE_PIXEL_PNG);
+    for (const [docxMarkdown, markdown] of [
+      ["Start\n\n![Image](seed.png)\n\nEnd", "Start\n\nNew paragraph\n\nEnd"],
+      ["![Image](seed.png)\n\nEnd", "New paragraph\n\nEnd"],
+      ["Start\n\n![Image](seed.png)", "Start\n\nNew paragraph"],
+    ]) {
+      rmSync(outputPath, { force: true });
+      writeFileSync(inputPath, docxMarkdown!);
+      synchronizeMarkdownToDocx(inputPath, outputPath);
+      writeFileSync(inputPath, markdown!);
+      const originalDocx = readFileSync(outputPath);
+      assert.throws(() => synchronizeMarkdownToDocx(inputPath, outputPath), /ambiguous/);
+      assert.equal(readFileSync(inputPath, "utf8"), markdown);
+      assert.deepEqual(readFileSync(outputPath), originalDocx);
+      assert.equal(existsSync(path.join(directory, "images")), false);
+    }
   }));
 
 test("conversion rejects unsupported image formats and missing output directories", () =>

@@ -1,7 +1,8 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { tokenizeInlineMarkdown } from "./inline-markdown.ts";
+import { resolveMarkdownImagePath } from "./image-path.ts";
 import type {
   HeadingLevel,
   ListKind,
@@ -15,7 +16,7 @@ const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const REL = "http://schemas.openxmlformats.org/package/2006/relationships";
 const CT = "http://schemas.openxmlformats.org/package/2006/content-types";
-const HYPERLINK_RID_BASE = 10;
+const FIRST_CONTENT_RELATIONSHIP_ID = 10;
 
 const INK = "1F2328";
 const MUTED = "656D76";
@@ -41,7 +42,7 @@ type ImageInfo = {
   widthPx: number;
   heightPx: number;
 };
-type ListDefinition = { listId: number; listKind: ListKind; start: number };
+type ListDefinition = { listId: number; listKind: ListKind; start: number; level: ListLevel };
 type RunStyle = {
   bold?: boolean;
   italic?: boolean;
@@ -54,6 +55,8 @@ type RunStyle = {
 type ListTypography = Required<Pick<RunStyle, "bold" | "sizeHalfPoints">>;
 type RenderState = {
   bookmarkId: number;
+  drawingId: number;
+  relationshipId: number;
   hyperlinks: Hyperlink[];
   images: ImageInfo[];
   baseDirectory: string;
@@ -204,7 +207,7 @@ function hyperlinkRun(
   if (url.protocol !== "http:" && url.protocol !== "https:" && url.protocol !== "mailto:") {
     throw new SyntaxError(`Unsupported link protocol: ${url.protocol}`);
   }
-  const id = `rId${HYPERLINK_RID_BASE + state.hyperlinks.length}`;
+  const id = `rId${state.relationshipId++}`;
   state.hyperlinks.push({ id, target });
   return `<w:hyperlink r:id="${id}" w:history="1">${run}</w:hyperlink>`;
 }
@@ -331,31 +334,15 @@ function parsePngSize(data: Buffer, sourcePath: string): { widthPx: number; heig
   return { widthPx: data.readUInt32BE(16), heightPx: data.readUInt32BE(20) };
 }
 
-function resolveImagePath(markdownPath: string, baseDirectory: string): string {
-  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(markdownPath)) {
-    throw new Error(`Remote and data images are not supported: ${markdownPath}`);
-  }
-  const sourcePath = path.isAbsolute(markdownPath)
-    ? path.normalize(markdownPath)
-    : path.resolve(baseDirectory, markdownPath);
-  if (path.extname(sourcePath).toLowerCase() !== ".png") {
-    throw new Error(`Unsupported image format for ${markdownPath}. Only PNG is supported.`);
-  }
-  if (!existsSync(sourcePath) || !statSync(sourcePath).isFile()) {
-    throw new Error(`PNG image does not exist or is not a file: ${sourcePath}`);
-  }
-  return sourcePath;
-}
-
 function registerImage(markdownPath: string, state: RenderState): ImageInfo {
-  const sourcePath = resolveImagePath(markdownPath, state.baseDirectory);
+  const sourcePath = resolveMarkdownImagePath(markdownPath, state.baseDirectory);
   const existing = state.images.find((image) => image.sourcePath === sourcePath);
   if (existing) return existing;
   const data = readFileSync(sourcePath);
   const { widthPx, heightPx } = parsePngSize(data, sourcePath);
   const imageNumber = state.images.length + 1;
   const image: ImageInfo = {
-    id: `rId${999 + imageNumber}`,
+    id: `rId${state.relationshipId++}`,
     target: `media/image${imageNumber}.png`,
     sourcePath,
     widthPx,
@@ -376,7 +363,7 @@ function imageParagraphXml(markdownPath: string, alt: string, state: RenderState
     widthEmu = Math.round(widthEmu * ratio);
     heightEmu = Math.round(heightEmu * ratio);
   }
-  const docPrId = 1000 + state.images.findIndex((item) => item.sourcePath === image.sourcePath);
+  const docPrId = state.drawingId++;
   return `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="80" w:after="120"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${widthEmu}" cy="${heightEmu}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${docPrId}" name="Picture ${docPrId}" descr="${escapeAttr(alt)}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="${escapeAttr(path.basename(image.sourcePath))}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${image.id}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${widthEmu}" cy="${heightEmu}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
 }
 
@@ -440,7 +427,7 @@ function numberingXml(definitions: ListDefinition[]): string {
       const abstractId = definition.listKind === "bullet" ? 0 : 1;
       const override = definition.start === 1
         ? ""
-        : `<w:lvlOverride w:ilvl="0"><w:startOverride w:val="${definition.start}"/></w:lvlOverride>`;
+        : `<w:lvlOverride w:ilvl="${definition.level}"><w:startOverride w:val="${definition.start}"/></w:lvlOverride>`;
       return `<w:num w:numId="${definition.listId}"><w:abstractNumId w:val="${abstractId}"/>${override}</w:num>`;
     })
     .join("");
@@ -510,13 +497,15 @@ function listDefinitions(blocks: MarkdownBlock[]): ListDefinition[] {
   for (const block of blocks) {
     if (block.kind !== "list") continue;
     const existing = definitions.get(block.listId);
-    if (existing && existing.listKind !== block.listKind) {
-      throw new Error(`List ${block.listId} mixes ordered and bullet numbering.`);
+    if (existing && (existing.listKind !== block.listKind ||
+      existing.level !== block.level || existing.start !== block.start)) {
+      throw new Error(`List ${block.listId} has inconsistent numbering definitions.`);
     }
     definitions.set(block.listId, {
       listId: block.listId,
       listKind: block.listKind,
       start: block.start,
+      level: block.level,
     });
   }
   return [...definitions.values()].sort((left, right) => left.listId - right.listId);
@@ -525,6 +514,8 @@ function listDefinitions(blocks: MarkdownBlock[]): ListDefinition[] {
 export function renderDocx(blocks: MarkdownBlock[], baseDirectory: string): Buffer {
   const state: RenderState = {
     bookmarkId: 1,
+    drawingId: 1,
+    relationshipId: FIRST_CONTENT_RELATIONSHIP_ID,
     hyperlinks: [],
     images: [],
     baseDirectory: path.resolve(baseDirectory),

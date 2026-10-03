@@ -6,6 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pythonExecutable } from "@expgolemclone/envx-runtime";
 
+import { resolveMarkdownImagePath } from "./image-path.ts";
 import {
   markdownBlockSignature,
   normalizeVisibleText,
@@ -127,22 +128,6 @@ function extractDocxRecords(docxPath: string, stagingDirectory: string): Extract
   return parseExtractorResult(extracted.stdout.trim(), stagingDirectory);
 }
 
-function resolveMarkdownImagePath(markdownPath: string, baseDirectory: string): string {
-  if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(markdownPath)) {
-    throw new Error(`Remote and data images are not supported: ${markdownPath}`);
-  }
-  const sourcePath = path.isAbsolute(markdownPath)
-    ? path.normalize(markdownPath)
-    : path.resolve(baseDirectory, markdownPath);
-  if (path.extname(sourcePath).toLowerCase() !== ".png") {
-    throw new Error(`Unsupported image format for ${markdownPath}. Only PNG is supported.`);
-  }
-  if (!existsSync(sourcePath) || !statSync(sourcePath).isFile()) {
-    throw new Error(`PNG image does not exist or is not a file: ${sourcePath}`);
-  }
-  return sourcePath;
-}
-
 function markdownRecords(markdown: string, markdownDirectory: string): MarkdownRecord[] {
   return parseMarkdown(markdown).flatMap((block): MarkdownRecord[] => {
     if (block.kind === "image") {
@@ -193,22 +178,21 @@ function imageGap<T extends DocxRecord | MarkdownRecord>(
     const record = records[index]!;
     if (record.kind !== "anchor") continue;
     before = uniqueAnchors.get(record.signature);
-    if (before) break;
+    if (!before) {
+      if (strict) throw new Error("Unable to place a DOCX image because no surrounding text or table block maps uniquely to Markdown.");
+      return undefined;
+    }
+    break;
   }
   for (let index = imageIndex + 1; index < records.length; index += 1) {
     const record = records[index]!;
     if (record.kind !== "anchor") continue;
     after = uniqueAnchors.get(record.signature);
-    if (after) break;
-  }
-  if (!before && !after) {
-    const hasAnchors = records.some((record) => record.kind === "anchor");
-    if (strict && hasAnchors) {
-      throw new Error(
-        "Unable to place a DOCX image because no surrounding text or table block maps uniquely to Markdown.",
-      );
+    if (!after) {
+      if (strict) throw new Error("Unable to place a DOCX image because no surrounding text or table block maps uniquely to Markdown.");
+      return undefined;
     }
-    if (hasAnchors) return undefined;
+    break;
   }
   if (
     before?.block.sourceEndLine !== undefined &&
@@ -342,6 +326,12 @@ export function planDocxImageSynchronization(
         if (matchByDocxIndex.has(image.recordIndex)) continue;
         const remaining = remainingByDigest.get(image.record.digest) ?? 0;
         if (remaining < 1) continue;
+        const gapStart = image.gap.beforeBlock?.sourceEndLine ?? -1;
+        const gapEnd = image.gap.afterBlock?.sourceStartLine ?? Infinity;
+        if (sourceRecords.some((record) => record.kind === "anchor" &&
+          record.block.sourceStartLine! > gapStart && record.block.sourceStartLine! < gapEnd)) {
+          throw new Error("Unable to place a DOCX image: its Markdown position is ambiguous between surrounding anchors.");
+        }
         remainingByDigest.set(image.record.digest, remaining - 1);
 
         let previousMatch: MarkdownImageRecord | undefined;

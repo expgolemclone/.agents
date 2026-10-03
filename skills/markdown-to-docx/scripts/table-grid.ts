@@ -51,9 +51,7 @@ export function buildTableGrid<T extends SpannedTableCell>(
 
   for (let rowIndex = 0; rowIndex < sourceRows.length; rowIndex += 1) {
     const sourceRow = sourceRows[rowIndex]!;
-    if (sourceRow.cells.length === 0) {
-      throw new SyntaxError(`Table row ${rowIndex + 1} ${context} has no cells.`);
-    }
+    // A row may be fully occupied by preceding rowspans without declaring cells.
     rows[rowIndex] ??= [];
     let column = 0;
     for (const cell of sourceRow.cells) {

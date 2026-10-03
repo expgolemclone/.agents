@@ -22,6 +22,15 @@ This fixture checks **bold**, *italic*, ~~strikethrough~~, `inline code`, and an
         1. Fifth-level ordered item at the minimum size
 4. Ordered item with another wrapped sentence for list alignment verification.
 
+- First parent with a nested list starting at three
+  3. Child three
+  4. Child four
+- Second parent with an independent nested list
+  7. Child seven
+  8. Child eight
+
+Literal code must retain backslashes: `a\*b`, `C:\temp\file`, and ``a`b\*c``.
+
 > A blockquote must keep a visible left border and readable spacing.
 
 ---
@@ -49,6 +58,15 @@ This fixture checks **bold**, *italic*, ~~strikethrough~~, `inline code`, and an
     <tr><td>Task 2 with literal **markers**<br>Second line</td><td align="center">Open</td></tr>
     <tr><td>Area B</td><td colspan="2">One cell spanning two columns</td></tr>
   </tbody>
+</table>
+
+### Fully spanned rows
+
+<table>
+  <colgroup><col width="100"><col width="100"></colgroup>
+  <tr><td rowspan="3" colspan="2">This cell spans all three rows.</td></tr>
+  <tr></tr>
+  <tr></tr>
 </table>
 
 ## Long code block

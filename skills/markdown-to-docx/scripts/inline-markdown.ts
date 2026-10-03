@@ -20,7 +20,7 @@ const ESCAPABLE_MARKDOWN_CHARACTERS = new Set([
 ]);
 
 const INLINE_MARKDOWN_PATTERN =
-  /!?\[[^\]]*\]\([^)]*\)|`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_/g;
+  /!?\[[^\]]*\]\([^)]*\)|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|\*[^*]+\*|_[^_]+_/g;
 
 export type InlineMarkdownToken =
   | { kind: "text" | "code" | "bold" | "italic" | "strike"; text: string }
@@ -61,7 +61,7 @@ function protectMarkdownEscapes(source: string): ProtectedMarkdown {
   };
 }
 
-export function tokenizeInlineMarkdown(source: string): InlineMarkdownToken[] {
+function tokenizeNonCodeMarkdown(source: string): InlineMarkdownToken[] {
   const protectedMarkdown = protectMarkdownEscapes(source);
   const tokens: InlineMarkdownToken[] = [];
   let index = 0;
@@ -77,7 +77,6 @@ export function tokenizeInlineMarkdown(source: string): InlineMarkdownToken[] {
 
     const image = /^!\[([^\]]*)\]\(([^)]*)\)$/.exec(rawToken);
     const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(rawToken);
-    const code = /^`([^`]+)`$/.exec(rawToken);
     const bold = /^(?:\*\*|__)(.*)(?:\*\*|__)$/.exec(rawToken);
     const strike = /^~~(.*)~~$/.exec(rawToken);
     const italic = /^(?:\*|_)(.*)(?:\*|_)$/.exec(rawToken);
@@ -94,8 +93,6 @@ export function tokenizeInlineMarkdown(source: string): InlineMarkdownToken[] {
         text: protectedMarkdown.restore(link[1]!),
         target: protectedMarkdown.restore(link[2]!),
       });
-    } else if (code) {
-      tokens.push({ kind: "code", text: protectedMarkdown.restore(code[1]!) });
     } else if (bold) {
       tokens.push({ kind: "bold", text: protectedMarkdown.restore(bold[1]!) });
     } else if (strike) {
@@ -113,6 +110,51 @@ export function tokenizeInlineMarkdown(source: string): InlineMarkdownToken[] {
       text: protectedMarkdown.restore(protectedMarkdown.text.slice(index)),
     });
   }
+  return tokens;
+}
+
+export function findInlineCodeSpan(source: string, start: number): { text: string; end: number } | undefined {
+  if (source[start] !== "`") return undefined;
+  let contentStart = start;
+  while (source[contentStart] === "`") contentStart += 1;
+  const delimiterLength = contentStart - start;
+  for (let cursor = contentStart; cursor < source.length; ) {
+    if (source[cursor] !== "`") {
+      cursor += 1;
+      continue;
+    }
+    let end = cursor;
+    while (source[end] === "`") end += 1;
+    if (end - cursor === delimiterLength) {
+      let text = source.slice(contentStart, cursor).replace(/\r\n|[\r\n]/g, " ");
+      if (text.startsWith(" ") && text.endsWith(" ") && /[^ ]/.test(text)) text = text.slice(1, -1);
+      return { text, end };
+    }
+    cursor = end;
+  }
+  return undefined;
+}
+
+export function tokenizeInlineMarkdown(source: string): InlineMarkdownToken[] {
+  const tokens: InlineMarkdownToken[] = [];
+  let chunkStart = 0;
+  for (let cursor = 0; cursor < source.length; cursor += 1) {
+    if (source[cursor] === "\\" && ESCAPABLE_MARKDOWN_CHARACTERS.has(source[cursor + 1] ?? "")) {
+      cursor += 1;
+      continue;
+    }
+    if (source[cursor] !== "`") continue;
+    const span = findInlineCodeSpan(source, cursor);
+    if (!span) {
+      while (source[cursor + 1] === "`") cursor += 1;
+      continue;
+    }
+    tokens.push(...tokenizeNonCodeMarkdown(source.slice(chunkStart, cursor)));
+    tokens.push({ kind: "code", text: span.text });
+    chunkStart = span.end;
+    cursor = span.end - 1;
+  }
+  tokens.push(...tokenizeNonCodeMarkdown(source.slice(chunkStart)));
   return tokens;
 }
 

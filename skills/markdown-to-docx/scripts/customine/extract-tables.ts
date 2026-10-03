@@ -132,6 +132,22 @@ function escapeAttribute(value: string): string {
   return escapeHtml(value).replace(/"/g, "&quot;");
 }
 
+function validateCellContent(cell: Element, tableId: string): void {
+  const supportedTags = new Set(["b", "strong", "i", "em", "s", "strike", "font", "span", "br"]);
+  for (const element of allElements(cell)) {
+    if (!supportedTags.has(element.tagName)) {
+      throw new SyntaxError(`Unsupported <${element.tagName}> inside a cell in ${tableId}.`);
+    }
+    // Font family and size use the shared DOCX typography; color is preserved.
+    const allowedAttributes = element.tagName === "font" ? ["color", "face", "size"] : [];
+    for (const item of element.attrs) {
+      if (!allowedAttributes.includes(item.name)) {
+        throw new SyntaxError(`Unsupported '${item.name}' attribute on <${element.tagName}> in ${tableId}.`);
+      }
+    }
+  }
+}
+
 function inlineMarkdown(node: Node): string {
   if ("value" in node) {
     const normalized = node.value.replace(/\u00a0/g, " ").replace(/[ \t\r\n]+/g, " ");
@@ -244,10 +260,16 @@ function cellTextColor(
 function sourceRows(table: Element, tableId: string): SourceRow[] {
   const nestedTables = descendantElements(table, "table");
   if (nestedTables.length > 0) throw new SyntaxError(`Nested tables are not supported in ${tableId}.`);
+  for (const element of [table, ...allElements(table)]) {
+    if (!["td", "th"].includes(element.tagName) && attribute(element, "style") !== undefined) {
+      throw new SyntaxError(`Unsupported style on <${element.tagName}> in ${tableId}.`);
+    }
+  }
   const rows = descendantElements(table, "tr");
   if (rows.length < 1) throw new SyntaxError(`Table ${tableId} contains no rows.`);
   return rows.map((row) => {
     const cells = directElementChildren(row, new Set(["td", "th"])).map((cell): SourceCell => {
+      validateCellContent(cell, tableId);
       const style = sourceCellStyle(
         parseTableCellStyle(attribute(cell, "style"), `in ${tableId}`),
       );
@@ -270,7 +292,6 @@ function sourceRows(table: Element, tableId: string): SourceRow[] {
         borders: style.borders,
       };
     });
-    if (cells.length < 1) throw new SyntaxError(`Table ${tableId} contains an empty row.`);
     return { cells };
   });
 }
@@ -353,6 +374,11 @@ function rectangularize(
 export function extractTablesFromHtml(html: string): ExtractedTable[] {
   const document = parse(html);
   const elements = allElements(document);
+  for (const element of elements) {
+    if (["img", "svg", "canvas", "object", "embed", "video", "audio", "iframe"].includes(element.tagName)) {
+      throw new SyntaxError(`Unsupported <${element.tagName}> in workbook HTML.`);
+    }
+  }
   const tables = elements.filter((element) => element.tagName === "table");
   const anchorByTable = new Map<Element, Element>();
   let pendingAnchor: Element | undefined;

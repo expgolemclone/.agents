@@ -44,7 +44,7 @@ node scripts/customine/extract-tables.ts C:\path\workbook.html C:\path\selected.
 
 The extractor rejects ranges that cut through a rowspan or a detected Customine action. It emits each action as an independent `<table style="break-inside:avoid">` block and places its action row in `thead`, so a continued action repeats that row. A page-title table uses `break-after:avoid;border:none` to stay with the first action without acquiring Word's default grid. A complete action stays on one page whenever it fits.
 
-The generated fragment preserves relative widths, rowspan, colspan, alignment, cell fills, uniform cell text colors, per-edge solid borders, and literal workbook text. Positive border widths up to 16px are preserved so the DOCX renderer can raise hairline borders to Word's minimum. Omitted trailing cells are filled, and a terminal border-only row is folded into the preceding content row. Mixed text colors and unsupported CSS are rejected instead of being dropped.
+The generated fragment preserves relative widths, rowspan, colspan, alignment, cell fills, uniform cell text colors, per-edge solid borders, and literal workbook text. Positive border widths up to 16px are preserved so the DOCX renderer can raise hairline borders to Word's minimum. Omitted trailing cells are filled, and a terminal border-only row is folded into the preceding content row. Mixed text colors, images, unsupported cell elements or attributes, and unsupported CSS are rejected instead of being dropped. Font family and size use the shared DOCX typography; uniform font colors and bold, italic, or strikethrough are preserved.
 
 Do not hand-edit generated table HTML. Rerun the extractor with corrected selections.
 
@@ -72,7 +72,7 @@ Include no LibreOffice navigation block, unrelated action, or technical table ID
 
 ## 4. Create and verify the DOCX
 
-Return to the parent skill's `Convert` and `Verify` sections with the report Markdown and requested DOCX path. Render the DOCX and inspect every page.
+Return to the parent skill's workflow and [Markdown verification](markdown.md#verification) with the report Markdown and requested DOCX path. Render the DOCX and inspect every page.
 
 Before delivery, confirm all requested TODOs, pages, and actions are present and unrelated content is absent. Confirm merged cells, relative widths, cell fills, text colors, borders, comparison operators, Markdown punctuation, and Japanese text remain correct. At every page boundary inside or immediately before a Customine table, confirm there is no isolated action row or border-only row and that a continued action repeats its action row.
 
