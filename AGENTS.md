@@ -2,47 +2,32 @@
 
 ## General
 
-- 記号は半角とし, 句読点は `, ` と `. ` を使う.
-- `*.md` はなるべく簡潔にし, 不要な記述は削除する.
-- 一時的なfileやfolderは `C:/dev/tmp/reponame-taskname-timestamp` に配置し, 作業終了後に削除する.
-- 依頼の範囲内で実行可能な作業をすべて完了するまで終了しない. 続行できない作業は阻害要因を報告する.
-- userへの迎合は禁止. userがほんの少しでも愚かな指示をしてきたらtaskを行わない. 問題点を指摘し指示の変更を求める.
-
-## Tools
-
-- 数字の選択肢で質問する. 推奨案は1にする. 合理的に推測できる内容は質問しない.
-- 画像生成と手動のGUI操作は行わない. 必要ならuserに依頼する.
+- 全角記号は禁止. 句読点は `, ` と `. ` を使う.
+- codeとdocumentを簡潔に保つ. 二重管理, fallback, overrideは禁止.
+- 問題のある指示は指摘する. 推測できない事項だけ質問し, 番号付きの推奨案を1にする.
+- 作業は完了まで進め, 阻害要因は報告する. 画像生成と手動GUI操作は禁止.
 
 ## Preparation
 
-- planは `PLAN.md` にtodo listで書き, 進捗を更新する. 全項目が `- [x]` になったら削除する.
-- local repositoryのpathが必要な場合は, `$HOME/local-repository-map/RepositoryMap.psm1` をimportし, `Read-LocalRepositoryMap` を実行する.
-- taskに関係ある `RULES.md`, `SKILL.md` を読む.
-- softwareのinstall時は, `expgolemclone/envx/RULES.md` に従う.
+- `$HOME/local-repository-map/RepositoryMap.psm1` の `Read-LocalRepositoryMap` で対象を特定する.
+- 関連する `RULES.md`, `SKILL.md` を読む. installは `expgolemclone/envx/RULES.md` に従う.
 
-## Design
+## Design and Testing
 
-- 設計のきれいさを最優先し, ECRS(排除, 統合, 再配置, 簡素化)の順に改善を検討する.
-  - backward compatibilityは破壊して良い.
-  - 分かりづらいfolder構成は放置せず直す.
-  - Eliminateしたいが迷う箇所はuserに聞く.
-- 二重管理禁止.
-- fallbackとoverrideは禁止.
-- 根本原因を解決する. 同様の問題はすべて解決する. 再発防止までやる.
+- ECRSで設計とfolder/file構成を簡素化する. backward compatibilityに拘らず, 削除判断に迷えば質問する.
+- test失敗は根本原因と同類の問題を修正し, 再発を防ぐ. skipやforceで回避しない.
 
-## Testing
+## Workflow
 
-- testが失敗したら原因を調査して修正する. `skip`, `force` で回避しない.
+- gitではなくjjを使い, Conventional Commitsに従う.
+- taskごとに最新remote `main` を `C:/dev/tmp/<repo>-<task>-<timestamp>/repository/` へ独立cloneして作業する.
+- 複数工程の `PLAN.md` と一時出力はtask領域のrepository外に置く.
+- fetch, rebase, test後に `main` へ前進pushする. 更新競合時は繰り返す.
+- push後にRepositoryMap登録先を排他で最新 `main` に同期する. 既存変更があれば停止する.
+- 全完了後だけtask領域を削除する. 未完了領域は一括清掃しない.
 
-## Version Control
+## Constraints
 
-`git` ではなく `jj` を使う. remoteがなければ関連指示は省略.
-
-- 作業開始時にremoteの最新状態を取得し, localより進んでいればlocalにも反映する. 古い前提でplanしない.
-- working copyに既存の変更があれば, 今回の変更とは分けてcommitし, 先にpushする.
-- commit messageはConventional Commitsに従い, `<type>[optional scope][!]: <description>` とする.
-- 作業終了後はpushし, localとremoteのbookmarkが `main` のみであることを確認する.
-  - `main` 以外のbookmarkやbranchの扱いに迷う場合はuserに質問する.
-  - expgolemclone 以外のuserのrepositoryにpushしない.
-- Box上のfileは `git` と `jj` で管理しない.
-- private repositoryではGitHub Actionsを使わない.
+- bookmarkはlocal, remoteとも `main` のみ. 他のbookmarkやbranchは勝手に変更せず質問する.
+- expgolemclone以外にはpushしない. remoteなしは登録先で直列作業する.
+- Box上ではgit/jjを使わず, private repositoryではGitHub Actionsを使わない.
