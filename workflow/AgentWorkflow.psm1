@@ -140,9 +140,11 @@ function Assert-Execute {
 function New-Task {
     param($Entry, [string]$Name, [switch]$Execute)
     if ($Name -cnotmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$') { throw 'Task name must be a lowercase slug.' }
-    $id = "$Name-$([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'))-$([guid]::NewGuid().ToString('N').Substring(0,8))"
-    $repoName = $Entry.repository -replace '[^a-zA-Z0-9-]', '-'
-    $path = Join-Path $script:TmpRoot "$repoName-$id"
+    if ($Entry.repository -cnotmatch '^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$') { throw 'Repository must be owner/repo with filesystem-safe names.' }
+    $randomId = [guid]::NewGuid().ToString('N').Substring(0,8)
+    $id = "$Name-$([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'))-$randomId"
+    $repoName = $Entry.repository -replace '/', '--'
+    $path = Join-Path $script:TmpRoot "$repoName--$Name--$randomId"
     $null = New-Item -ItemType Directory -Path $path -ErrorAction Stop
     $path = Assert-SafeTaskPath $path
     $state = [pscustomobject]@{
@@ -539,6 +541,7 @@ Sync-AgentRepository -TaskDirectory <task>                     # retry sync only
 Remove-AgentTask -TaskDirectory <task> [-ResearchComplete]    # completed work/research only
 
 Default phase is plan. Use -Execute/-Doit only after explicit user authorization.
+Task directory: C:/dev/tmp/<owner>--<repo>--<task>--<id>/ (id = 8 random hex digits, not a commit hash).
 Use the returned Repository as cwd. PLAN.md and artifacts stay beside it until handoff.
 Occupied handoffs are omitted, never automatically reclaimed. No crash monitoring.
 Edit claimed .handoff/PLAN.md body only; do not edit its header.

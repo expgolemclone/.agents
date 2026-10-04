@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $modulePath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../AgentWorkflow.psm1'))
 $module = Import-Module $modulePath -Force -PassThru
-$root = "C:/dev/tmp/agents-workflow-tests-$([DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss-fff'))-$([guid]::NewGuid().ToString('N').Substring(0,8))"
+$root = "C:/dev/tmp/expgolemclone--.agents--workflow-tests--$([guid]::NewGuid().ToString('N').Substring(0,8))"
 $null = New-Item -ItemType Directory -Path $root
 $script:Tasks = [Collections.Generic.List[string]]::new()
 $script:Checks = 0
@@ -66,6 +66,20 @@ function Clean-TestDirectory {
 # Default planning phase blocks every remote mutation, while research clones work.
 $f = New-Fixture 'normal'
 $p = Task $f 'planning' -Plan
+$leaf = Split-Path $p.TaskDirectory -Leaf
+Assert ($leaf -cmatch '^expgolemclone--workflow-test--planning--[0-9a-f]{8}$') 'Task directory uses owner--repo--task--random-id without timestamp'
+Assert ($p.TaskId -cmatch '^planning-\d{8}-\d{6}-\d{3}-[0-9a-f]{8}$') 'Task ID format stays unchanged'
+Assert ($p.TaskId.EndsWith('-' + ($leaf -split '--')[-1])) 'Directory random ID still correlates with task ID'
+Assert ($p.Repository -eq (Join-Path $p.TaskDirectory 'repository')) 'Internal repository layout stays unchanged'
+$repeat = Task $f 'planning' -Plan
+Assert ($repeat.TaskDirectory -ne $p.TaskDirectory) 'Repeated task names get independent directories'
+$null = Remove-AgentTask $repeat.TaskDirectory -ResearchComplete
+$namedEntry = [pscustomobject]@{ repository = 'Example-Owner/.dot_repo-name'; remote = $f.remote; path = $f.path }
+$named = Task $namedEntry 'path-check' -Plan
+Assert ((Split-Path $named.TaskDirectory -Leaf) -cmatch '^Example-Owner--\.dot_repo-name--path-check--[0-9a-f]{8}$') 'Mapped owner/repo punctuation and case are preserved'
+$null = Remove-AgentTask $named.TaskDirectory -ResearchComplete
+$unsafeEntry = [pscustomobject]@{ repository = 'owner/../escape'; remote = $f.remote; path = $f.path }
+Expect-Error { & $module { param($e) New-Task $e 'path-check' } $unsafeEntry } 'owner/repo'
 Assert ($p.Phase -eq 'plan') 'Default phase is plan'
 Expect-Error { Publish-AgentHandoff $p.TaskDirectory } 'plan phase'
 Expect-Error { Receive-AgentHandoff $p.TaskDirectory 'nothing' } 'plan phase'
@@ -300,7 +314,7 @@ Assert ([bool](Tip $observer.Repository 'unrelated')) 'Unrelated branch preserve
 
 # Unsafe cleanup paths are rejected before deletion.
 Expect-Error { Remove-AgentTask 'C:/dev/tmp' } 'direct child'
-$linkRoot = Join-Path 'C:/dev/tmp' "agents-workflow-link-$([guid]::NewGuid().ToString('N'))"
+$linkRoot = Join-Path 'C:/dev/tmp' "expgolemclone--.agents--workflow-link--$([guid]::NewGuid().ToString('N').Substring(0,8))"
 $null = New-Item -ItemType Junction -Path $linkRoot -Target $b.TaskDirectory
 Expect-Error { Remove-AgentTask $linkRoot } 'link or junction'
 Remove-Item -LiteralPath $linkRoot

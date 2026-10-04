@@ -8,6 +8,8 @@
 
 ## Workflow
 
+Task directories use `C:/dev/tmp/<owner>--<repo>--<task>--<id>/`, e.g. `expgolemclone--.agents--fix-widget--a1b2c3d4`. Preserve mapped owner/repo names, use a short task slug and an 8-digit random hexadecimal ID, not a commit hash. Task IDs and handoff branch names are unchanged.
+
 ```powershell
 Import-Module "$HOME/.agents/workflow/AgentWorkflow.psm1"
 Get-AgentWorkflowHelp
