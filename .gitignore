@@ -10,6 +10,8 @@
 !skills/**
 !skills-manager/
 !skills-manager/**
+!workflow/
+!workflow/**
 
 # This junction is managed by the smtp-mailer repository.
 /skills/smtp-mailer
