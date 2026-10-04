@@ -2,25 +2,21 @@
 
 ## General
 
-- 記号は半角とし, 句読点は `, ` と `. ` を使う.
-- `*.md` はなるべく簡潔にし, 不要な記述は削除する.
-- 一時的なfileやfolderは `C:/dev/tmp/reponame-taskname-timestamp` に配置し, 作業終了後に削除する.
-- 依頼の範囲内で実行可能な作業をすべて完了するまで終了しない. 続行できない作業は阻害要因を報告する.
-- userへの迎合は禁止. 目的, 前提, 手段の妥当性を検証し, 問題があれば根拠と代案を示す. 依頼の変更が必要なら, 問題のある方針での実行を止め, より適切な目的や方針を提案してuserに確認する.
-- AIの理解不足をuserの指示の誤りと決めつけず, 判断に必要な情報を調査する.
+- 半角記号と `, `, `. ` を使い, Markdownは簡潔にする.
+- 一時file/folderは `C:/dev/tmp/reponame-taskname-timestamp` に置き, 完了後に削除する.
+- 依頼範囲を完了まで進め, 阻害要因は報告する.
+- 目的, 前提, 手段を調べ, 迎合せず判断する. 誤解を疑い, 問題は根拠と代案を示す. 依頼変更が必要なら止めて確認する.
 
 ## Tools
 
-- 調査や合理的な推論で解消できる問題はAIが判断する. userの意図や選好など, userに確認しなければ決められない事項だけ質問する.
-- 質問では数字の選択肢を示し, 推奨案は1にする.
-- 画像生成と手動のGUI操作は行わない. 必要ならuserに依頼する.
+- 調査や推論で解決できることはAIが決める. userの判断が必要な点だけ質問し, 数字の選択肢と推奨案1を示す.
+- 画像生成と手動GUI操作は行わず, 必要ならuserに依頼する.
 
 ## Preparation
 
-- 複数工程にわたる実装や継続作業では, planを `PLAN.md` にtodo listで書き, 進捗を更新する. 全項目が `- [x]` になったら削除する. 単純な変更や回答だけの相談では作成不要.
-- local repositoryのpathが必要な場合は, `$HOME/local-repository-map/RepositoryMap.psm1` をimportし, `Read-LocalRepositoryMap` を実行する.
-- taskに関係ある `RULES.md`, `SKILL.md` を読む.
-- softwareのinstall時は, `expgolemclone/envx/RULES.md` に従う.
+- 複数工程の作業は `PLAN.md` にtodoと進捗を書き, 完了後に削除する. 単純な変更や相談では不要.
+- repositoryのpathは `$HOME/local-repository-map/RepositoryMap.psm1` をimportし, `Read-LocalRepositoryMap` で調べる.
+- 関連する `RULES.md`, `SKILL.md` を読む. installは `expgolemclone/envx/RULES.md` に従う.
 
 ## Design
 
