@@ -14,6 +14,7 @@
 
 ## Preparation
 
+- planはrepository rootの `PLAN.md` にtodo listで書き, 進捗を更新する.
 - local repositoryのpathが必要な場合は, `$HOME/local-repository-map/RepositoryMap.psm1` をimportし, `Read-LocalRepositoryMap` を実行する.
 - 作業前に, 関連する全repository内を再帰的に探索し, 全ての `RULES.md`, `SKILL.md` を読む.
 - softwareのinstall前に, `expgolemclone/envx/RULES.md` に従う.
