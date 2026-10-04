@@ -19,6 +19,10 @@
 - 作業前に, 関連する全repository内を再帰的に探索し, 全ての `RULES.md`, `SKILL.md` を読む.
 - softwareのinstall前に, `expgolemclone/envx/RULES.md` に従う.
 
+## Execution
+
+- 依頼の範囲内で実行可能な作業をすべて完了するまで終了しない. 続行できない作業は, 残作業と阻害要因を報告する.
+
 ## Design
 
 - 設計のきれいさを最優先し, ECRS(排除, 統合, 再配置, 簡素化)の順に改善を検討する.
