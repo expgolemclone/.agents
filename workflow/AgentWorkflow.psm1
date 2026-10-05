@@ -397,9 +397,10 @@ function Sync-AgentRepository {
         $safe = Invoke-Jj $registered @('bookmark', 'list', '--remote', 'origin', 'exact:main', '-T',
             ('if(remote == "origin", if(normal_target.contained_in("' + $before.Trim() + '::"), "yes"))'))
         if ($safe.Trim() -ne 'yes') { throw 'Registered main has unpublished or divergent work.' }
-        $publishedParents = Invoke-Jj $registered @('workspace', 'list', '-T',
-            'if(target.contained_in("::main@origin"), "yes", if(target.empty(), target.parents().map(|p| if(p.contained_in("::main@origin"), "yes", "no")).join(","), "no"))')
-        if ($publishedParents.Trim() -ne 'yes') { throw 'Registered working copy contains unpublished work.' }
+        # Safe workspaces emit nothing; any unpublished workspace or parent blocks synchronization.
+        $unpublished = Invoke-Jj $registered @('workspace', 'list', '-T',
+            'if(!target.contained_in("::main@origin"), if(target.empty(), target.parents().map(|p| if(!p.contained_in("::main@origin"), "no")).join(""), "no"))')
+        if ($unpublished.Trim()) { throw 'Registered working copy contains unpublished work.' }
         $null = Invoke-Jj $registered @('new', $tip)
         $null = Invoke-Jj $registered @('bookmark', 'set', 'main', '-r', $tip)
         if ((Invoke-Jj $registered @('diff', '--from', $tip, '--to', '@', '--summary')).Trim()) {

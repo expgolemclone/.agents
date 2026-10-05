@@ -178,6 +178,47 @@ $null = Jj $f.path @('new', '@')
 Expect-Error { Complete-AgentTask $u.TaskDirectory 'feat: remote' {} } 'unpublished work'
 Assert (Test-Path (Join-Path $f.path 'private.txt')) 'Unpublished ancestors preserved'
 
+# Multiple registered workspaces and published merge parents are safe, without moving other workspaces.
+$mf = New-Fixture 'multiple-workspaces'
+$seedTip = Tip $mf.path
+$fixtureRoot = Split-Path $mf.path -Parent
+$publishedWorkspace = Join-Path $fixtureRoot 'published'
+$emptyWorkspace = Join-Path $fixtureRoot 'empty'
+$mergeWorkspace = Join-Path $fixtureRoot 'published-merge'
+$null = Jj $mf.path @('workspace', 'add', '--name', 'published', '-r', 'main', $publishedWorkspace)
+[IO.File]::WriteAllText((Join-Path $publishedWorkspace 'published.txt'), 'published')
+$null = Jj $publishedWorkspace @('describe', '-m', 'test: published workspace')
+$publishedTip = (Jj $publishedWorkspace @('log', '--no-graph', '-r', '@', '-T', 'commit_id')).Trim()
+$null = Jj $mf.path @('bookmark', 'set', 'main', '-r', $publishedTip)
+$null = Jj $mf.path @('git', 'push', '--remote', 'origin', '--bookmark', 'exact:main')
+$null = Jj $mf.path @('workspace', 'add', '--name', 'empty', '-r', 'main', $emptyWorkspace)
+$null = Jj $mf.path @('workspace', 'add', '--name', 'published-merge', '-r', $seedTip, '-r', $publishedTip, $mergeWorkspace)
+Assert ((Jj $mf.path @('workspace', 'list', '-T', 'if(name == "published", if(target.empty(), "empty", "nonempty"))')).Trim() -eq 'nonempty') 'Fixture includes a nonempty published workspace'
+Assert ((Jj $mf.path @('workspace', 'list', '-T', 'if(name == "published-merge", if(target.empty(), target.parents().map(|p| "parent").join(",")))')).Trim() -eq 'parent,parent') 'Fixture includes an empty merge with two published parents'
+$otherTargets = Jj $mf.path @('workspace', 'list', '-T', 'if(name != "default", name ++ ":" ++ target.commit_id() ++ "\n")')
+$multi = Task $mf 'multi-workspace-sync'
+[IO.File]::WriteAllText((Join-Path $multi.Repository 'remote.txt'), 'remote')
+$null = Complete-AgentTask $multi.TaskDirectory 'feat: multiple workspaces' {}
+Assert (Test-Path (Join-Path $mf.path 'remote.txt')) 'Multiple safe workspaces synchronize to latest main'
+Assert ((Jj $mf.path @('workspace', 'list', '-T', 'if(name != "default", name ++ ":" ++ target.commit_id() ++ "\n")')) -eq $otherTargets) 'Synchronization preserves every other workspace target'
+
+# Any unsafe secondary workspace or merge parent still blocks synchronization.
+$privateWorkspace = Join-Path $fixtureRoot 'private'
+$null = Jj $mf.path @('workspace', 'add', '--name', 'private', '-r', 'main', $privateWorkspace)
+[IO.File]::WriteAllText((Join-Path $privateWorkspace 'private.txt'), 'private')
+$null = Jj $privateWorkspace @('describe', '-m', 'wip: private workspace')
+$privateTip = (Jj $privateWorkspace @('log', '--no-graph', '-r', '@', '-T', 'commit_id')).Trim()
+Expect-Error { Sync-AgentRepository $multi.TaskDirectory } 'unpublished work'
+Assert ([IO.File]::ReadAllText((Join-Path $privateWorkspace 'private.txt')) -eq 'private') 'Unpublished secondary workspace content preserved'
+$null = Jj $privateWorkspace @('new', '@')
+Expect-Error { Sync-AgentRepository $multi.TaskDirectory } 'unpublished work'
+$null = Jj $privateWorkspace @('new', 'main', $privateTip)
+Assert ((Jj $mf.path @('workspace', 'list', '-T', 'if(name == "private", if(target.empty(), target.parents().map(|p| if(p.contained_in("::main@origin"), "yes", "no")).join(",")))')).Trim() -eq 'yes,no') 'Fixture includes an empty merge with one unpublished parent'
+$blockedTargets = Jj $mf.path @('workspace', 'list', '-T', 'name ++ ":" ++ target.commit_id() ++ "\n"')
+Expect-Error { Sync-AgentRepository $multi.TaskDirectory } 'unpublished work'
+Assert ((Jj $mf.path @('workspace', 'list', '-T', 'name ++ ":" ++ target.commit_id() ++ "\n"')) -eq $blockedTargets) 'Blocked synchronization changes no workspace target'
+Assert ([IO.File]::ReadAllText((Join-Path $privateWorkspace 'private.txt')) -eq 'private') 'Unpublished merge content preserved'
+
 # Explicit handoff publishes PLAN/code only to its branch. Occupied bodies stay out of output.
 $hf = New-Fixture 'handoff'
 $source = Task $hf 'unfinished'
