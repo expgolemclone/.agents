@@ -12,8 +12,8 @@ Use the bundled CLIs, not manual document reconstruction.
 3. Run from this skill directory:
 
 ```powershell
-node scripts/markdown-to-docx.ts C:\path\input.md C:\path\output.docx
-python scripts/render-docx.py C:\path\output.docx
+envx-node run scripts/markdown-to-docx.ts C:\path\input.md C:\path\output.docx
+envx-python scripts/render-docx.py C:\path\output.docx
 ```
 
 Existing output DOCX files are inspected first: missing body images are imported into Markdown before regeneration. Markdown text remains authoritative. Ambiguous or unsupported imports fail without changing the source or existing DOCX.

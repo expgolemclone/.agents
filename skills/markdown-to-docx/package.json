@@ -7,8 +7,8 @@
     "node": ">=22.18.0"
   },
   "scripts": {
-    "check": "tsc --noEmit",
-    "test": "node --test tests/*.test.ts"
+    "check": "envx-node tsc --noEmit",
+    "test": "envx-node run --test tests/*.test.ts"
   },
   "dependencies": {
     "parse5": "8.0.1"

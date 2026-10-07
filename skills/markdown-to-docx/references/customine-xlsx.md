@@ -9,7 +9,7 @@ Require LibreOffice and Python with PyMuPDF in addition to the dependencies in t
 Choose an HTML output path and render directory that do not exist. Run from the parent skill directory:
 
 ~~~powershell
-node scripts/customine/xlsx-to-html.ts C:\path\input.xlsx C:\path\workbook.html --render-dir C:\path\html-render
+envx-node run scripts/customine/xlsx-to-html.ts C:\path\input.xlsx C:\path\workbook.html --render-dir C:\path\html-render
 ~~~
 
 The CLI prints one JSON object:
@@ -27,13 +27,13 @@ The converter never deletes or overwrites an existing HTML path or render direct
 List normalized worksheet tables and one-based row previews:
 
 ~~~powershell
-node scripts/customine/extract-tables.ts C:\path\workbook.html --list
+envx-node run scripts/customine/extract-tables.ts C:\path\workbook.html --list
 ~~~
 
 Select complete tables or one-based inclusive row ranges into a new Markdown fragment. Repeat `--select` in report order:
 
 ~~~powershell
-node scripts/customine/extract-tables.ts C:\path\workbook.html C:\path\selected.md --select table0:1-12 --select table3
+envx-node run scripts/customine/extract-tables.ts C:\path\workbook.html C:\path\selected.md --select table0:1-12 --select table3
 ~~~
 
 - `table0` selects the complete first worksheet table.
