@@ -31,6 +31,8 @@ For handoff, write remaining todos, blockers and next steps in PLAN.md, then `Pu
 
 Completion creates a code-only change on current main, tests it, pushes forward, deletes the owned handoff branch, and synchronizes the mapped checkout under a lock. Tests run from the clone root, must throw on failure, and must not change tracked files. Up to three main-update races are retried; claim races are never retried automatically. Pushes to other GitHub owners are refused.
 
+Scheduled repository synchronization uses `Invoke-AgentRepositoryLock -RepositoryPath <path> -Action { ... }` for the same normalized-path lock as completion. `Test-AgentRepositoryPathAllowed` checks the Box boundary before any VCS operation. The action must keep cleanliness checks, updates and verification inside the lock.
+
 Failures retain the task and test log. Resolve the cause and retry completion; already-pushed code is not pushed again. A dirty mapped checkout stops synchronization without undoing main publication. Every registered workspace must be published, or empty with all parents published. Synchronization moves only the mapped workspace; other workspace targets stay unchanged. `Sync-AgentRepository` retries synchronization alone. Do not edit a clone after successful publication. Cleanup accepts only completed managed tmp directories and rejects links. For completed plan-phase research, use `Remove-AgentTask -ResearchComplete` without publishing.
 
 Integration tests, with local remotes only: `pwsh -NoProfile -File workflow/tests/AgentWorkflow.Tests.ps1`.

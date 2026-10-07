@@ -79,7 +79,7 @@ function Resolve-Repository {
     Import-Module "$HOME/local-repository-map/RepositoryMap.psm1" -ErrorAction Stop
     $entries = @((Read-LocalRepositoryMap).repositories | Where-Object repository -eq $Repository)
     if ($entries.Count -ne 1 -or -not $entries[0].remote) { throw 'A unique mapped repository with a remote is required.' }
-    if ($entries[0].path -match '(?i)[\\/]box(?:[\\/]|$)|[\\/]box_projects[\\/]') { throw 'Box repositories are not supported.' }
+    if (-not (Test-AgentRepositoryPathAllowed $entries[0].path)) { throw 'Box repositories are not supported.' }
     return $entries[0]
 }
 
@@ -372,6 +372,37 @@ function Test-Published {
     return $result.Trim() -eq 'yes'
 }
 
+function Test-AgentRepositoryPathAllowed {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$RepositoryPath)
+    $path = [IO.Path]::GetFullPath($RepositoryPath)
+    return $path -notmatch '(?i)[\\/]box(?:[\\/]|$)|[\\/]box_projects(?:[\\/]|$)'
+}
+
+function Invoke-AgentRepositoryLock {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$RepositoryPath,
+        [Parameter(Mandatory)][scriptblock]$Action,
+        [ValidateRange(0, 3600)][int]$TimeoutSeconds = 60
+    )
+    $path = [IO.Path]::GetFullPath($RepositoryPath).TrimEnd('\', '/')
+    if (-not (Test-AgentRepositoryPathAllowed $path)) { throw 'Box repositories are not supported.' }
+    $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
+        [Text.Encoding]::UTF8.GetBytes($path.ToLowerInvariant())))
+    $mutex = [Threading.Mutex]::new($false, "Local\AgentRepoSync-$hash")
+    $locked = $false
+    try {
+        try { $locked = $mutex.WaitOne([TimeSpan]::FromSeconds($TimeoutSeconds)) }
+        catch [Threading.AbandonedMutexException] { $locked = $true }
+        if (-not $locked) { throw 'Registered repository synchronization is busy.' }
+        & $Action
+    } finally {
+        if ($locked) { $mutex.ReleaseMutex() }
+        $mutex.Dispose()
+    }
+}
+
 function Sync-AgentRepository {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$TaskDirectory)
@@ -379,14 +410,7 @@ function Sync-AgentRepository {
     Assert-Execute $state
     if (-not $state.published) { throw 'Main publication must be confirmed before synchronization.' }
     $registered = $state.registeredPath
-    $hash = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData(
-        [Text.Encoding]::UTF8.GetBytes($registered.ToLowerInvariant().TrimEnd('\', '/'))))
-    $mutex = [Threading.Mutex]::new($false, "Local\AgentRepoSync-$hash")
-    $locked = $false
-    try {
-        try { $locked = $mutex.WaitOne([TimeSpan]::FromSeconds(60)) }
-        catch [Threading.AbandonedMutexException] { $locked = $true }
-        if (-not $locked) { throw 'Registered repository synchronization is busy.' }
+    Invoke-AgentRepositoryLock -RepositoryPath $registered -Action {
         Assert-Origin $registered $state.remote
         if ((Invoke-Jj $registered @('diff', '--summary')).Trim()) { throw 'Registered repository has changes; synchronization stopped.' }
         $before = Invoke-Jj $registered @('bookmark', 'list', 'exact:main', '-T', 'if(!remote, normal_target.commit_id())')
@@ -409,9 +433,6 @@ function Sync-AgentRepository {
         $state.synchronized = $true
         Save-Task $state
         [pscustomobject]@{ Status = 'Synchronized'; Main = $tip }
-    } finally {
-        if ($locked) { $mutex.ReleaseMutex() }
-        $mutex.Dispose()
     }
 }
 
@@ -539,6 +560,8 @@ Publish-AgentHandoff -TaskDirectory <task>                     # local PLAN.md -
 Unlock-AgentHandoff -TaskDirectory <task>                     # update PLAN/code, then release
 Complete-AgentTask -TaskDirectory <task> -Message 'fix: ...' -Test { <tests; throw on failure> }
 Sync-AgentRepository -TaskDirectory <task>                     # retry sync only
+Invoke-AgentRepositoryLock -RepositoryPath <path> -Action { <sync> }
+Test-AgentRepositoryPathAllowed -RepositoryPath <path>         # Box policy
 Remove-AgentTask -TaskDirectory <task> [-ResearchComplete]    # completed work/research only
 
 Default phase is plan. Use -Execute/-Doit only after explicit user authorization.
@@ -556,4 +579,5 @@ Never edit the task clone after a confirmed main push; retry only pending post-p
 
 Export-ModuleMember -Function Start-AgentTask, Enable-AgentTaskExecution, Get-AgentHandoff,
     Receive-AgentHandoff, Publish-AgentHandoff, Unlock-AgentHandoff, Complete-AgentTask,
-    Sync-AgentRepository, Remove-AgentTask, Get-AgentWorkflowHelp
+    Sync-AgentRepository, Invoke-AgentRepositoryLock, Test-AgentRepositoryPathAllowed,
+    Remove-AgentTask, Get-AgentWorkflowHelp

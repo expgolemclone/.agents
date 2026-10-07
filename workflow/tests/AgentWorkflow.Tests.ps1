@@ -63,6 +63,28 @@ function Clean-TestDirectory {
     Remove-Item -LiteralPath $Path -Recurse
 }
 
+# Scheduled sync and workflow completion share one normalized-path lock and Box policy.
+foreach ($path in @('C:/dev/Box/repo', 'C:/dev/box_projects/repo')) {
+    Assert (-not (Test-AgentRepositoryPathAllowed $path)) 'Box paths are excluded'
+    Expect-Error { Invoke-AgentRepositoryLock -RepositoryPath $path -Action { throw 'Must not run' } } 'Box repositories'
+}
+$lockPath = Join-Path $root 'lock-repository'
+Assert ((Invoke-AgentRepositoryLock -RepositoryPath $lockPath -Action { 'result' }) -eq 'result') 'Lock returns action output'
+Expect-Error { Invoke-AgentRepositoryLock -RepositoryPath $lockPath -Action { throw 'action failed' } } 'action failed'
+Assert ((Invoke-AgentRepositoryLock -RepositoryPath $lockPath -TimeoutSeconds 0 -Action { 'released' }) -eq 'released') 'Failure releases lock'
+Invoke-AgentRepositoryLock -RepositoryPath $lockPath -Action {
+    $job = Start-Job -ArgumentList $modulePath, ($lockPath.ToUpperInvariant() + '/') -ScriptBlock {
+        param($modulePath, $path)
+        Import-Module $modulePath
+        try { Invoke-AgentRepositoryLock -RepositoryPath $path -TimeoutSeconds 0 -Action { 'incorrectly acquired' } }
+        catch { $_.Exception.Message }
+    }
+    try {
+        $output = Receive-Job $job -Wait -AutoRemoveJob
+        Assert ($output -eq 'Registered repository synchronization is busy.') 'Concurrent normalized path cannot acquire held lock'
+    } finally { if (Get-Job -Id $job.Id -ErrorAction SilentlyContinue) { Remove-Job $job } }
+}
+
 # Default planning phase blocks every remote mutation, while research clones work.
 $f = New-Fixture 'normal'
 $p = Task $f 'planning' -Plan
