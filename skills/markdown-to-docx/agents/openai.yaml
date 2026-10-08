@@ -1,4 +1,4 @@
 interface:
   display_name: "Markdown to DOCX"
   short_description: "Verified DOCX reports and resumes with portrait cells"
-  default_prompt: "Use $markdown-to-docx to convert Markdown or a Customine XLSX export into a verified DOCX report or resume with a correctly sized portrait cell."
+  default_prompt: "Use $markdown-to-docx to convert Markdown into a verified DOCX report or resume with a correctly sized portrait cell."

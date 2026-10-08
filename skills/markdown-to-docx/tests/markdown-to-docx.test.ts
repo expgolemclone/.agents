@@ -274,7 +274,7 @@ test("code appendix conversion is opt-in and preserves internal anchors", () => 
 test("unclosed code fences and nonpositive appendix thresholds fail", () => {
   assert.throws(() => parseMarkdown("```ts\nconst x = 1;"), /not closed/);
   assert.throws(() => moveLongCodeBlocksToAppendix("body", 0), /positive integer/);
-  assert.throws(() => parseMarkdown(":::customine\npage: A\n:::"), /Custom directives/);
+  assert.throws(() => parseMarkdown(":::unsupported\nvalue: A\n:::"), /Custom directives/);
 });
 
 test("parseHtmlTable materializes colspan and rowspan without overlap", () => {

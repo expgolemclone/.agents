@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  escapeMarkdownText,
   inlineMarkdownTokensPlainText,
   tokenizeInlineMarkdown,
 } from "../scripts/inline-markdown.ts";
@@ -43,7 +42,6 @@ test("inline Markdown has one token stream for rendering and plain text", () => 
     inlineMarkdownTokensPlainText(tokens),
     "plain *literal* link code bold strong italic em strike alt",
   );
-  assert.equal(escapeMarkdownText("a*b\\c"), "a\\*b\\\\c");
 });
 
 test("inline code preserves literal backslashes and matching backtick delimiters", () => {

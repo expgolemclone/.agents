@@ -1,13 +1,13 @@
 ---
 name: markdown-to-docx
-description: Create or update verified Word DOCX reports and resumes from Markdown or selected Customine-exported XLSX content, with merged tables, nested lists, Word-pasted images, and upper-right portrait cells.
+description: Create or update verified Word DOCX reports and resumes from Markdown, with merged tables, nested lists, Word-pasted images, and upper-right portrait cells.
 ---
 
 # Markdown to DOCX
 
 Use the bundled CLIs, not manual document reconstruction.
 
-1. Read [Markdown authoring and verification](references/markdown.md) completely. For Customine XLSX, also read and follow [the XLSX workflow](references/customine-xlsx.md).
+1. Read [Markdown authoring and verification](references/markdown.md) completely.
 2. Inspect the complete Markdown source and referenced PNGs. Choose absolute input/output paths and an existing output directory. For a resume portrait, follow the reference's [photo-cell layout](references/markdown.md#resume-photo-layout); use a top-aligned rightmost cell, not a standalone centered image or floating overlay. Confirm the requested document before editing it.
 3. Run from this skill directory:
 

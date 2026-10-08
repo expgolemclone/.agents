@@ -10,9 +10,6 @@
     "check": "envx-node tsc --noEmit",
     "test": "envx-node run --test tests/*.test.ts"
   },
-  "dependencies": {
-    "parse5": "8.0.1"
-  },
   "devDependencies": {
     "@types/node": "26.6.4",
     "typescript": "7.0.2"

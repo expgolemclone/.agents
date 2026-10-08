@@ -167,12 +167,3 @@ export function inlineMarkdownTokensPlainText(tokens: readonly InlineMarkdownTok
 export function markdownInlinePlainText(source: string): string {
   return inlineMarkdownTokensPlainText(tokenizeInlineMarkdown(source));
 }
-
-export function escapeMarkdownText(source: string): string {
-  let escaped = "";
-  for (const character of source) {
-    if (ESCAPABLE_MARKDOWN_CHARACTERS.has(character)) escaped += "\\";
-    escaped += character;
-  }
-  return escaped;
-}
