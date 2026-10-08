@@ -1,16 +1,16 @@
 ---
 name: smec-quality
-description: smec-secondのPDF原本照合, HTML校正, 採点基準audit, quality branchの統合に使う. 完成ページを10ページごとにmainへ統合し, 未統合の蓄積を防ぐ.
+description: smec-secondのPDF原本照合, HTML校正, 採点基準auditに使う. repositoryの品質契約と小バッチ統合手順に従い, 完成範囲をmainへ反映する.
 ---
 
 # smec-second quality
 
-RepositoryMapで `expgolemclone/smec-second` を特定し, 対象repositoryの `RULES.md`, `docs/parallel-quality.md`, `docs/html-quality.md` を読んで従う. PDF OCRを修正するときは `docs/pdf-reocr.md` も読む. 所有権とtask操作は共通agent workflowに従う.
+RepositoryMapで `expgolemclone/smec-second` を特定し, 対象repositoryの `RULES.md`, `docs/parallel-quality.md`, `docs/html-quality.md` を読んで従う. 原本の取得と版確認は `docs/source-pdfs.md`, PDF OCRの修正は `docs/pdf-reocr.md` も読む.
 
-## 10ページごとのmain統合
+## 作業開始
 
-- 原本照合と必要な検証が完了したHTMLの `source_file` を重複なしで数える. 再録, 同じページの再修正, OCR証拠だけの更新は別ページとして加算しない.
-- 完成10ページごとに必ずmainへ統合する. 10ページに達したら次のページの作業へ進まず, 最新mainへのfetch/rebase, 影響範囲のtest, codeだけのmainへの前進push, 登録先の排他同期, repoルールに従うdeployを完了する.
-- 設問の続きが10ページの境界をまたぐ場合は手前の完成範囲で統合し, 次のtaskで続きを扱う. task終了時も10ページ未満の完成分を統合し, 次回へ溜めない.
-- 統合, test, 同期, deployに失敗したら新しいページへ進まず原因を修正する. 解消できない阻害要因は報告し, 未完了taskを保持する. 未検証ページを統合しない.
-- 既存quality branchの内容は所有権と明示的な引き継ぎを確認したうえで, mainで既に反映された修正を除き, 完成10ページ以下の単位で統合する. branch全体の一括mergeや無断変更はしない.
+所有権, task clone, 実行許可, 引き継ぎと完了操作は共通agent workflowのhelperに従う. 想定外の旧quality branchを検出してhelperが停止したら, branchを保全してuserへ確認する. 明示承認された保全はhelperのtask単位のbranch名とtip確認で記録し, failed startのcloneを実装へ転用しない. 保全は所有権や統合許可ではない. 所有権の確認だけで停止条件を回避せず, 明示承認された移行手順が確定するまで旧branchの統合を開始しない.
+
+## 品質と統合
+
+原本証拠と完了判定は `docs/html-quality.md`, ページの数え方, 設問と採点条件の依存関係を閉じた統合境界, 小バッチの上限とtask切り替えは `docs/parallel-quality.md` を正本とする. 統合後の続きは最新mainから新しいtask cloneで行い, mainへのpushが確認されたcloneを編集しない.
