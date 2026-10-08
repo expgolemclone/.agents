@@ -17,10 +17,10 @@ Lists use two-space indentation, up to nine levels. Each nested list has its own
 | Body paragraphs and blockquotes | 10.5 pt | Regular |
 | Table cells | 10.5 pt | Regular; header cells are bold |
 | Lists and their markers, all nine depths | 10.5 pt | Bold at depths 1 and 2; regular thereafter |
-| Heading 1 | 22.5 pt | Bold |
-| Heading 2 | 19.5 pt | Bold |
-| Heading 3 | 17.5 pt | Bold |
-| Heading 4 | 15 pt | Bold |
+| Heading 1 | 20 pt | Bold |
+| Heading 2 | 16 pt | Bold |
+| Heading 3 | 13 pt | Bold |
+| Heading 4 | 11.5 pt | Bold |
 | Fenced code blocks, including appendices | 9.5 pt | Regular |
 
 Heading sizes are independent of list typography. Inline code, links, bold, italic, and strikethrough retain the containing block's size.
@@ -75,7 +75,7 @@ Markdown text remains the source of truth. Before regeneration, import only miss
 
 Confirm successful CLI exit and a valid ZIP package signature. Inspect the DOCX XML for applicable features:
 
-- Typography: `w:sz` and `w:szCs` use half-point units and match the typography table, through direct formatting or paragraph-style inheritance. All list text and markers use 21; headings use 45, 39, 35, and 30; code blocks use 19.
+- Typography: `w:sz` and `w:szCs` use half-point units and match the typography table, through direct formatting or paragraph-style inheritance. All list text and markers use 21; headings use 40, 32, 26, and 23; code blocks use 19.
 - Bullet and ordered numbering definitions, including the actual level's start value for nested lists.
 - Merges: `w:gridSpan`, `w:vMerge`.
 - Explicit widths: fixed layout and proportional `w:gridCol` values.

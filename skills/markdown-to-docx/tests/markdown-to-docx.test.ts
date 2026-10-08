@@ -101,12 +101,15 @@ function replaceDocxPngWithJpeg(docxPath: string): void {
   assert.equal(converted.status, 0, converted.stderr);
 }
 
-function paragraphXmlContaining(documentXml: string, text: string): string {
-  const paragraph = documentXml
+function paragraphXmlContaining(documentXml: string, text: string, styleId?: string): string {
+  const paragraphs = documentXml
     .match(/<w:p>.*?<\/w:p>/g)
-    ?.find((candidate) => candidate.includes(`>${text}</w:t>`));
-  assert.ok(paragraph, `Paragraph not found for text: ${text}`);
-  return paragraph;
+    ?.filter((candidate) =>
+      candidate.includes(`>${text}</w:t>`) &&
+      (styleId === undefined || candidate.includes(`<w:pStyle w:val="${styleId}"/>`)),
+    ) ?? [];
+  assert.equal(paragraphs.length, 1, `Expected one paragraph for text: ${text}, style: ${styleId}`);
+  return paragraphs[0]!;
 }
 
 function runXmlContaining(paragraphXml: string, text: string): string {
@@ -251,7 +254,21 @@ test("code appendix conversion is opt-in and preserves internal anchors", () => 
   assert.match(transformed, /\[Appendix A\]\(#appendix_code_block_1\)/);
   assert.match(transformed, /## Appendix/);
   assert.match(transformed, /\{#appendix_code_block_1\}/);
-  assert.equal(parseMarkdown(markdown, { codeAppendixThreshold: 2 }).some((block) => block.kind === "pagebreak"), true);
+  const blocks = parseMarkdown(markdown, { codeAppendixThreshold: 2 });
+  assert.equal(blocks.some((block) => block.kind === "pagebreak"), true);
+  const buffer = renderDocx(blocks, process.cwd());
+  const documentXml = zipXml(buffer, "word/document.xml");
+  const stylesXml = zipXml(buffer, "word/styles.xml");
+  for (const [text, styleId, sizeHalfPoints] of [
+    ["Appendix", "Heading2", 32],
+    ["Appendix A", "Heading3", 26],
+    ["1", "CodeBlock", 19],
+  ] as const) {
+    const paragraph = paragraphXmlContaining(documentXml, text, styleId);
+    assert.match(paragraph, new RegExp(`<w:pStyle w:val="${styleId}"/>`));
+    assert.doesNotMatch(runXmlContaining(paragraph, text), /<w:sz(?:Cs)?\b/);
+    assertTypography(wordStyleXml(stylesXml, styleId), sizeHalfPoints, styleId !== "CodeBlock");
+  }
 });
 
 test("unclosed code fences and nonpositive appendix thresholds fail", () => {
@@ -492,15 +509,28 @@ test("renderDocx preserves backslashes inside inline code and pipe-table code sp
   assert.ok(document.includes('>a`b\\*c|d</w:t>'));
 });
 
-test("renderDocx uses independent heading sizes", () => {
+test("renderDocx uses independent heading sizes inherited by inline formatting", () => {
   const blocks = parseMarkdown(
-    ["# First", "## Second", "### Third", "#### Fourth"].join("\n"),
+    Array.from({ length: 4 }, (_value, index) =>
+      `${"#".repeat(index + 1)} Heading-${index + 1} with **bold**, *italic*, ~~strike~~, \`code\`, and [link](https://example.test)`,
+    ).join("\n"),
   );
-  const stylesXml = zipXml(renderDocx(blocks, process.cwd()), "word/styles.xml");
-  const sizesHalfPoints = [45, 39, 35, 30];
+  const buffer = renderDocx(blocks, process.cwd());
+  const stylesXml = zipXml(buffer, "word/styles.xml");
+  const documentXml = zipXml(buffer, "word/document.xml");
+  const sizesHalfPoints = [40, 32, 26, 23];
 
   for (const [index, sizeHalfPoints] of sizesHalfPoints.entries()) {
-    assertTypography(wordStyleXml(stylesXml, `Heading${index + 1}`), sizeHalfPoints, true);
+    const styleId = `Heading${index + 1}`;
+    const style = wordStyleXml(stylesXml, styleId);
+    assertTypography(style, sizeHalfPoints, true);
+    assert.match(style, /<w:basedOn w:val="Normal"\/>/);
+    const text = `Heading-${index + 1} with `;
+    const paragraph = paragraphXmlContaining(documentXml, text);
+    assert.match(paragraph, new RegExp(`<w:pStyle w:val="${styleId}"/>`));
+    for (const label of [text, "bold", "italic", "strike", "code", "link"]) {
+      assert.doesNotMatch(runXmlContaining(paragraph, label), /<w:sz(?:Cs)?\b/);
+    }
   }
   assert.doesNotMatch(stylesXml, /w:styleId="Heading[56]"/);
 });
