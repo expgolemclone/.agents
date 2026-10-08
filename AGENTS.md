@@ -11,7 +11,7 @@
 ## Preparation
 
 - `$HOME/local-repository-map/RepositoryMap.psm1` の `Read-LocalRepositoryMap` で対象を特定する.
-- 関連する `RULES.md`, `SKILL.md` を読む.
+- 関連する `RULES.md`, `SKILL.md` を読む. 共通skillは `$HOME/.agents/skills/`, repo固有skillは対象repoの `skills/` を正本とし, copyやsymlinkで二重管理しない.
 - 言語を問わずpackage, tool, runtimeの導入から実行, 更新, 廃止, 検証まで `expgolemclone/envx/RULES.md` に従う.
 
 ## Design and Testing
