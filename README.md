@@ -23,7 +23,9 @@ Complete-AgentTask -TaskDirectory $t.TaskDirectory -Message 'fix: widget' -Test 
 Remove-AgentTask -TaskDirectory $t.TaskDirectory
 ```
 
-Omit `-Execute` for planning; `continue` is not `doit`. Research files are allowed, but commits, pushes and claims are not. Use `Enable-AgentTaskExecution -TaskDirectory <task> -Doit` only after authorization.
+Omit `-Execute` for planning; only user `do` authorizes implementation, not `continue`. Research files are allowed, but commits, pushes and claims are not. Use `Enable-AgentTaskExecution -TaskDirectory <task> -Doit` only after that authorization.
+
+Unexpected remote refs stop task start and remote mutations. If the user explicitly approves leaving a particular existing branch untouched, supply its exact name and full lowercase tip with `Start-AgentTask -PreserveRemoteBranch @{ 'legacy/name' = '<full-tip>' }`. The helper records this task-only approval, fetches and verifies the tip at start and before publishing, and stops for new approval if the branch changes or disappears. Every other unexpected ref still stops work. A fresh task requires explicit preservation input again; approval grants no ownership, legacy-code integration or branch edits. Main and handoff refs cannot be preservation entries. Do not edit task metadata or turn failed start clones into implementation tasks.
 
 For handoff, write remaining todos, blockers and next steps in PLAN.md, then `Publish-AgentHandoff`. Only this explicit handoff publishes code and PLAN to `handoff/<task-id>`. Unfinished conflicts are allowed on handoff branches only. Successful ordinary tasks publish no plan.
 

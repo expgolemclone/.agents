@@ -53,13 +53,42 @@ function Fetch-Branch {
     $null = Invoke-Jj $Directory @('git', 'fetch', '--remote', 'origin', '--branch', "exact:$Branch")
 }
 
+function Assert-PreservedBranches {
+    param([Collections.IDictionary]$Branches)
+    foreach ($branch in $Branches.Keys) {
+        if ($branch -isnot [string] -or $branch -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*$' -or
+            $branch -match '\.\.|//|/$' -or $branch -ieq 'main' -or $branch -imatch '^handoff/' -or
+            $Branches[$branch] -isnot [string] -or $Branches[$branch] -cnotmatch '^(?:[0-9a-f]{40}|[0-9a-f]{64})$') {
+            throw 'Preservation requires an exact non-workflow branch name and full lowercase tip approved by the user.'
+        }
+    }
+}
+
+function Assert-TaskBranches {
+    param($State)
+    $branches = @{}
+    # Approval is optional task metadata, never inferred from remote refs.
+    $approval = $State.PSObject.Properties['preservedBranches']
+    if ($approval) {
+        foreach ($property in $approval.Value.PSObject.Properties) { $branches[$property.Name] = $property.Value }
+    }
+    Assert-RemoteBranches (Join-Path $State.path 'repository') $branches
+}
+
 function Assert-RemoteBranches {
-    param([string]$Directory)
+    param([string]$Directory, [Collections.IDictionary]$PreservedBranches = @{})
+    Assert-PreservedBranches $PreservedBranches
     $null = Invoke-Jj $Directory @('git', 'fetch', '--remote', 'origin', '--branch', '*')
     $names = (Invoke-Jj $Directory @('bookmark', 'list', '--remote', 'origin', '-T',
         'if(remote == "origin", name ++ "\n")')) -split '\r?\n' | Where-Object { $_ }
-    $unexpected = @($names | Where-Object { $_ -cne 'main' -and $_ -cnotmatch '^handoff/[a-z0-9-]+$' })
+    $unexpected = @($names | Where-Object { $_ -cne 'main' -and $_ -cnotmatch '^handoff/[a-z0-9-]+$' -and
+        $_ -cnotin @($PreservedBranches.Keys) })
     if ($unexpected.Count) { throw "Unexpected remote branches; ask before changing them: $($unexpected -join ', ')" }
+    foreach ($branch in $PreservedBranches.Keys) {
+        if ((Get-RemoteTip $Directory $branch) -cne $PreservedBranches[$branch]) {
+            throw "Preserved branch changed or disappeared; ask for new approval: $branch"
+        }
+    }
 }
 
 function Assert-PushAllowed {
@@ -132,13 +161,15 @@ function Assert-Origin {
 
 function Assert-Execute {
     param($State)
-    if ($State.phase -ne 'execute') { throw 'This task is in plan phase. Explicit doit authorization is required.' }
+    if ($State.phase -ne 'execute') { throw 'This task is in plan phase. Explicit user do authorization is required.' }
     Assert-PushAllowed $State.remote
     Assert-Origin (Join-Path $State.path 'repository') $State.remote
+    Assert-TaskBranches $State
 }
 
 function New-Task {
-    param($Entry, [string]$Name, [switch]$Execute)
+    param($Entry, [string]$Name, [switch]$Execute, [Collections.IDictionary]$PreserveRemoteBranch = @{})
+    Assert-PreservedBranches $PreserveRemoteBranch
     if ($Name -cnotmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$') { throw 'Task name must be a lowercase slug.' }
     if ($Entry.repository -cnotmatch '^[A-Za-z0-9-]+/[A-Za-z0-9._-]+$') { throw 'Repository must be owner/repo with filesystem-safe names.' }
     $randomId = [guid]::NewGuid().ToString('N').Substring(0,8)
@@ -154,6 +185,9 @@ function New-Task {
         base = ''; branch = ''; owner = $null; branchTip = ''
         candidate = ''; candidateChange = ''; candidateBase = ''; published = ''; branchDeleted = $false; synchronized = $false
     }
+    if ($PreserveRemoteBranch.Count) {
+        $state | Add-Member -NotePropertyName preservedBranches -NotePropertyValue ([pscustomobject]$PreserveRemoteBranch)
+    }
     Save-Task $state
     $repo = Join-Path $path 'repository'
     $null = Invoke-Jj $path @('git', 'clone', '--branch', 'main', $state.remote, $repo)
@@ -161,20 +195,21 @@ function New-Task {
     if (-not $state.base) { throw 'Remote main is required.' }
     $null = Invoke-Jj $repo @('bookmark', 'track', 'main@origin')
     Save-Task $state
-    Assert-RemoteBranches $repo
+    Assert-TaskBranches $state
     return [pscustomobject]@{ TaskDirectory = $path; Repository = $repo; Phase = $state.phase; TaskId = $id }
 }
 
 function Start-AgentTask {
     [CmdletBinding()]
-    param([Parameter(Mandatory)][string]$Repository, [Parameter(Mandatory)][string]$Name, [switch]$Execute)
-    New-Task (Resolve-Repository $Repository) $Name -Execute:$Execute
+    param([Parameter(Mandatory)][string]$Repository, [Parameter(Mandatory)][string]$Name, [switch]$Execute,
+        [Collections.IDictionary]$PreserveRemoteBranch = @{})
+    New-Task (Resolve-Repository $Repository) $Name -Execute:$Execute -PreserveRemoteBranch $PreserveRemoteBranch
 }
 
 function Enable-AgentTaskExecution {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$TaskDirectory, [Parameter(Mandatory)][switch]$Doit)
-    if (-not $Doit) { throw 'Explicit doit authorization is required.' }
+    if (-not $Doit) { throw 'Explicit user do authorization is required.' }
     $state = Read-Task $TaskDirectory
     $state.phase = 'execute'
     Save-Task $state
@@ -220,7 +255,12 @@ function Get-AgentHandoff {
 }
 
 function Push-Branch {
-    param([string]$Directory, [string]$Branch, [string]$Revision)
+    param($State, [string]$Branch, [string]$Revision)
+    if ($Branch -cne 'main' -and $Branch -cnotmatch '^handoff/[a-z0-9-]+$') {
+        throw 'Only main and handoff refs can be push targets; preserved refs are read-only.'
+    }
+    Assert-TaskBranches $State
+    $Directory = Join-Path $State.path 'repository'
     if (Get-RemoteTip $Directory $Branch) {
         # Reset only the local reference, never the saved changes or expected remote tip.
         $null = Invoke-Jj $Directory @('bookmark', 'forget', "exact:$Branch")
@@ -253,7 +293,7 @@ function Publish-AgentHandoff {
     $null = Invoke-Jj $repo @('restore', '--from', $source, '~root:.handoff')
     Write-Handoff $repo $meta ([IO.File]::ReadAllText($plan))
     $tip = Get-CurrentId $repo
-    Push-Branch $repo $branch $tip
+    Push-Branch $state $branch $tip
     $state.branch = $branch; $state.branchTip = $tip; $state.base = $base
     $state.candidate = ''; $state.candidateChange = ''; $state.candidateBase = ''
     Save-Task $state
@@ -284,7 +324,7 @@ function Receive-AgentHandoff {
     Write-Handoff $repo $record.Meta $record.Body
     $claim = Get-CurrentId $repo
     # Never fetch/rebase/retry this claim on failure. jj compares the remote's expected tip.
-    Push-Branch $repo $branch $claim
+    Push-Branch $state $branch $claim
     $state.taskId = $TaskId; $state.base = $record.Meta.base; $state.branch = $branch
     $state.owner = $owner; $state.branchTip = $claim
     Save-Task $state
@@ -326,7 +366,7 @@ function Unlock-AgentHandoff {
     $null = Invoke-Jj $repo @('restore', '--from', $source, '~root:.handoff')
     Write-Handoff $repo $record.Meta $record.Body
     $tip = Get-CurrentId $repo
-    Push-Branch $repo $state.branch $tip
+    Push-Branch $state $state.branch $tip
     $state.owner = $null; $state.branchTip = $tip; $state.base = $record.Meta.base
     $state.candidate = ''; $state.candidateChange = ''; $state.candidateBase = ''
     Save-Task $state
@@ -479,6 +519,7 @@ function Complete-AgentTask {
                 Assert-NoConflicts $repo
                 if ((Invoke-Jj $repo @('file', 'list', 'root:.handoff')).Trim()) { throw 'Handoff metadata must not reach main.' }
                 Invoke-TaskTest $state $Test
+                Assert-TaskBranches $state
                 # Save exact validated tip before push; retries detect a completed ambiguous push.
                 $state.candidate = Get-CurrentId $repo
                 Save-Task $state
@@ -494,7 +535,7 @@ function Complete-AgentTask {
                 }
                 try {
                     if ($state.branch) { $null = Assert-Owned $state $repo }
-                    Push-Branch $repo 'main' $state.candidate
+                    Push-Branch $state 'main' $state.candidate
                     $state.published = $state.candidate
                     Save-Task $state
                     break
@@ -552,7 +593,7 @@ function Remove-AgentTask {
 function Get-AgentWorkflowHelp {
     @'
 Import-Module "$HOME/.agents/workflow/AgentWorkflow.psm1"
-Start-AgentTask -Repository owner/name -Name task-slug [-Execute]
+Start-AgentTask -Repository owner/name -Name task-slug [-Execute] [-PreserveRemoteBranch @{ 'approved/name' = '<full-tip>' }]
 Enable-AgentTaskExecution -TaskDirectory <task> -Doit
 Get-AgentHandoff -TaskDirectory <task>                         # available IDs only
 Receive-AgentHandoff -TaskDirectory <fresh-task> -TaskId <id>   # claim, then expose PLAN
@@ -564,7 +605,9 @@ Invoke-AgentRepositoryLock -RepositoryPath <path> -Action { <sync> }
 Test-AgentRepositoryPathAllowed -RepositoryPath <path>         # Box policy
 Remove-AgentTask -TaskDirectory <task> [-ResearchComplete]    # completed work/research only
 
-Default phase is plan. Use -Execute/-Doit only after explicit user authorization.
+Default phase is plan. Use -Execute/-Doit only after explicit user do authorization.
+Preservation requires explicit user approval of each exact branch and full tip; it grants no integration or ownership.
+Approvals belong to this task only. Unapproved refs and changed/missing approved tips stop remote mutations.
 Task directory: C:/dev/tmp/<owner>--<repo>--<task>--<id>/ (id = 8 random hex digits, not a commit hash).
 Use the returned Repository as cwd. PLAN.md and artifacts stay beside it until handoff.
 Occupied handoffs are omitted, never automatically reclaimed. No crash monitoring.

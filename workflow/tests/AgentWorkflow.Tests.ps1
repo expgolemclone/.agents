@@ -46,10 +46,16 @@ function New-Fixture {
     [pscustomobject]@{ repository = 'expgolemclone/workflow-test'; remote = $remote; path = $registered }
 }
 function Task {
-    param($Fixture, [string]$Name, [switch]$Plan)
-    $task = & $module { param($e, $n, $execute) New-Task $e $n -Execute:$execute } $Fixture $Name (-not $Plan)
-    $script:Tasks.Add($task.TaskDirectory)
-    return $task
+    param($Fixture, [string]$Name, [switch]$Plan, [Collections.IDictionary]$PreserveRemoteBranch = @{})
+    $filter = "$($Fixture.repository -replace '/', '--')--$Name--*"
+    $before = @(Get-ChildItem 'C:/dev/tmp' -Directory -Filter $filter | ForEach-Object FullName)
+    try {
+        & $module { param($e, $n, $execute, $preserved) New-Task $e $n -Execute:$execute -PreserveRemoteBranch $preserved } $Fixture $Name (-not $Plan) $PreserveRemoteBranch
+    } finally {
+        foreach ($path in @(Get-ChildItem 'C:/dev/tmp' -Directory -Filter $filter | ForEach-Object FullName)) {
+            if ($path -notin $before) { $script:Tasks.Add($path) }
+        }
+    }
 }
 function Clean-TestDirectory {
     param([string]$Path)
@@ -374,6 +380,73 @@ $null = Jj $observer.Repository @('bookmark', 'set', 'unrelated', '-r', 'main@or
 $null = Jj $observer.Repository @('git', 'push', '--bookmark', 'unrelated')
 Expect-Error { & $module { param($d) Assert-RemoteBranches $d } $observer.Repository } 'Unexpected remote branches'
 Assert ([bool](Tip $observer.Repository 'unrelated')) 'Unrelated branch preserved'
+
+# User-approved preservation is exact, task-scoped, read-only and checked after tests.
+$pf = New-Fixture 'preserved'
+$producer = Task $pf 'legacy-producer'
+[IO.File]::WriteAllText((Join-Path $producer.Repository 'legacy.txt'), 'legacy content, not approved for integration')
+$null = Jj $producer.Repository @('describe', '-m', 'test: legacy branch')
+$null = Jj $producer.Repository @('bookmark', 'set', 'quality-work/audit')
+$null = Jj $producer.Repository @('git', 'push', '--bookmark', 'quality-work/audit')
+$legacy = Tip $producer.Repository 'quality-work/audit'
+Expect-Error { Task $pf 'unapproved' } 'Unexpected remote branches'
+Expect-Error { Task $pf 'wrong-tip' -PreserveRemoteBranch @{ 'quality-work/audit' = ('0' * 40) } } 'changed or disappeared'
+foreach ($approval in @(@{ main = $legacy }, @{ 'handoff/task' = $legacy }, @{ 'quality-work/*' = $legacy },
+        @{ 'quality-work/audit' = $legacy.Substring(0,8) })) {
+    Expect-Error { & $module { param($a) Assert-PreservedBranches $a } $approval } 'exact non-workflow branch'
+}
+$approved = Task $pf 'approved' -PreserveRemoteBranch @{ 'quality-work/audit' = $legacy }
+Assert (-not (Test-Path (Join-Path $approved.Repository 'legacy.txt'))) 'Preservation never imports legacy content'
+$approvalState = Get-Content (Join-Path $approved.TaskDirectory 'task.json') -Raw | ConvertFrom-Json
+Assert ($approvalState.preservedBranches.'quality-work/audit' -eq $legacy) 'Exact approved tip recorded only in task metadata'
+Expect-Error { & $module { param($s, $tip) Push-Branch $s 'quality-work/audit' $tip } $approvalState $legacy } 'read-only'
+[IO.File]::WriteAllText((Join-Path $approved.Repository 'normal.txt'), 'normal work')
+$null = Complete-AgentTask $approved.TaskDirectory 'feat: work beside preserved branch' {}
+Assert ((Tip $approved.Repository 'quality-work/audit') -eq $legacy) 'Normal main publication preserves legacy tip'
+Assert (-not (Test-Path (Join-Path $pf.path 'legacy.txt'))) 'Registered checkout excludes legacy work'
+Assert (-not (Test-Path (Join-Path $pf.path 'task.json'))) 'Approval metadata never reaches main'
+Expect-Error { Task $pf 'not-inherited' } 'Unexpected remote branches'
+
+$planned = Task $pf 'preserved-plan' -Plan -PreserveRemoteBranch @{ 'quality-work/audit' = $legacy }
+Expect-Error { Complete-AgentTask $planned.TaskDirectory 'fix: not authorized' {} } 'plan phase'
+$approvalSource = Task $pf 'preserved-handoff' -PreserveRemoteBranch @{ 'quality-work/audit' = $legacy }
+[IO.File]::WriteAllText((Join-Path $approvalSource.TaskDirectory 'PLAN.md'), '- [ ] finish independent work')
+$null = Publish-AgentHandoff $approvalSource.TaskDirectory
+$approvalOwner = Task $pf 'preserved-owner' -PreserveRemoteBranch @{ 'quality-work/audit' = $legacy }
+$null = Receive-AgentHandoff $approvalOwner.TaskDirectory $approvalSource.TaskId
+$null = Complete-AgentTask $approvalOwner.TaskDirectory 'chore: finish independent work' {}
+Assert ((Tip $approvalOwner.Repository 'quality-work/audit') -eq $legacy) 'Handoff claim/completion/deletion never changes preserved branch'
+
+$late = Task $pf 'late-branch' -PreserveRemoteBranch @{ 'quality-work/audit' = $legacy }
+[IO.File]::WriteAllText((Join-Path $late.Repository 'late.txt'), 'candidate')
+$beforeLate = Tip $late.Repository
+$lateTest = {
+    $null = Jj $producer.Repository @('bookmark', 'set', 'another-branch', '-r', 'main@origin')
+    $null = Jj $producer.Repository @('git', 'push', '--bookmark', 'another-branch')
+}.GetNewClosure()
+Expect-Error { Complete-AgentTask $late.TaskDirectory 'fix: late branch' $lateTest } 'Unexpected remote branches'
+Assert ((Tip $late.Repository) -eq $beforeLate) 'New unapproved branch during tests blocks main publication'
+$null = Jj $producer.Repository @('bookmark', 'delete', 'another-branch')
+$null = Jj $producer.Repository @('git', 'push', '--bookmark', 'another-branch')
+
+$changed = Task $pf 'changed-preserved' -PreserveRemoteBranch @{ 'quality-work/audit' = $legacy }
+[IO.File]::WriteAllText((Join-Path $changed.Repository 'changed.txt'), 'candidate')
+$beforeChanged = Tip $changed.Repository
+$changeTest = {
+    [IO.File]::WriteAllText((Join-Path $producer.Repository 'legacy.txt'), 'external update')
+    $null = Jj $producer.Repository @('describe', '-m', 'test: external legacy update')
+    $null = Jj $producer.Repository @('bookmark', 'set', 'quality-work/audit')
+    $null = Jj $producer.Repository @('git', 'push', '--bookmark', 'quality-work/audit')
+}.GetNewClosure()
+Expect-Error { Complete-AgentTask $changed.TaskDirectory 'fix: changed approval' $changeTest } 'changed or disappeared'
+Assert ((Tip $changed.Repository) -eq $beforeChanged) 'Changed approved tip during tests blocks main publication'
+$externalTip = Tip $producer.Repository 'quality-work/audit'
+Assert ($externalTip -ne $legacy) 'External branch update is preserved, not reset to approved tip'
+$deleted = Task $pf 'deleted-preserved' -PreserveRemoteBranch @{ 'quality-work/audit' = $externalTip }
+$null = Jj $producer.Repository @('bookmark', 'delete', 'quality-work/audit')
+$null = Jj $producer.Repository @('git', 'push', '--bookmark', 'quality-work/audit')
+Expect-Error { Complete-AgentTask $deleted.TaskDirectory 'fix: missing approval' {} } 'changed or disappeared'
+Assert (-not (Tip $deleted.Repository 'quality-work/audit')) 'Externally deleted branch is not recreated'
 
 # Unsafe cleanup paths are rejected before deletion.
 Expect-Error { Remove-AgentTask 'C:/dev/tmp' } 'direct child'
