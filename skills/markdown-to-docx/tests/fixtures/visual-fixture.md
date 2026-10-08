@@ -1,6 +1,6 @@
 # Markdown to DOCX QA
 
-This fixture checks **bold**, *italic*, ~~strikethrough~~, `inline code`, and an [external link](https://example.com).
+本文とリストは10.5pt. This fixture checks **bold**, *italic*, ~~strikethrough~~, `inline code`, and an [external link](https://example.com).
 
 ## Lists
 
@@ -12,14 +12,22 @@ This fixture checks **bold**, *italic*, ~~strikethrough~~, `inline code`, and an
   - Second-level bullet with a long sentence that wraps under the item text instead of the marker.
     - [x] Third-level completed task with an [external link](https://example.com)
       - Fourth-level bullet with `inline code`, *italic*, and ~~strikethrough~~.
-        - Fifth-level bullet with **explicit bold** that remains readable at the minimum size.
+        - Fifth-level bullet with **explicit bold** at the body size.
+          - Sixth-level bullet
+            - Seventh-level bullet
+              - Eighth-level bullet
+                - Ninth-level bullet
     - [ ] Third-level open task
 
 3. Ordered item starting at three
   1. Second-level ordered item
     1. Third-level ordered item
       1. Fourth-level ordered item
-        1. Fifth-level ordered item at the minimum size
+        1. Fifth-level ordered item at the body size
+          1. Sixth-level ordered item
+            1. Seventh-level ordered item
+              1. Eighth-level ordered item
+                1. Ninth-level ordered item
 4. Ordered item with another wrapped sentence for list alignment verification.
 
 - First parent with a nested list starting at three

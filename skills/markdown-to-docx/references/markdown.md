@@ -8,16 +8,24 @@ Require Node.js 22.18+ and shared runtime dependencies. Image synchronization an
 
 Use headings 1 through 4, paragraphs, blockquotes, horizontal rules, fenced code, unordered, ordered and task lists, pipe tables, links, bold, italic, strikethrough, inline code, and `<!-- pagebreak -->`. Heading levels 5 and 6 are rejected. Escape literal Markdown punctuation with a backslash outside code. Code spans preserve literal backslashes and may use matching multi-backtick delimiters. Pipe tables accept escaped pipes and pipes inside code spans.
 
-Lists use two-space indentation, up to nine levels. Each nested list has its own numbering instance and start value; returning to a parent starts a new child list. Explicit bold remains bold at every depth; other inline styles inherit the hierarchy size.
+Lists use two-space indentation, up to nine levels. Each nested list has its own numbering instance and start value; returning to a parent starts a new child list. All list text and markers use the body size. Indentation distinguishes depth; depths 1 and 2 are bold, and depths 3 through 9 are regular. Explicit bold remains bold at every depth.
 
-| Depth | List size | List weight | Heading size |
-| --- | ---: | --- | ---: |
-| 1 | 15 pt | Bold | 22.5 pt |
-| 2 | 13 pt | Bold | 19.5 pt |
-| 3 | 11.5 pt | Regular | 17.5 pt |
-| 4 and deeper | 10 pt | Regular | 15 pt at level 4 |
+## Typography
 
-Headings are bold and 1.5 times the corresponding list size, rounded to Word's half-point increments.
+| Element | Size | Weight |
+| --- | ---: | --- |
+| Body paragraphs and blockquotes | 10.5 pt | Regular |
+| Table cells | 10.5 pt | Regular; header cells are bold |
+| Lists and their markers, all nine depths | 10.5 pt | Bold at depths 1 and 2; regular thereafter |
+| Heading 1 | 22.5 pt | Bold |
+| Heading 2 | 19.5 pt | Bold |
+| Heading 3 | 17.5 pt | Bold |
+| Heading 4 | 15 pt | Bold |
+| Fenced code blocks, including appendices | 9.5 pt | Regular |
+
+Heading sizes are independent of list typography. Inline code, links, bold, italic, and strikethrough retain the containing block's size.
+
+## Images
 
 Use only local PNG images in standalone paragraphs, with paths relative to the Markdown file or local absolute paths:
 
@@ -67,6 +75,7 @@ Markdown text remains the source of truth. Before regeneration, import only miss
 
 Confirm successful CLI exit and a valid ZIP package signature. Inspect the DOCX XML for applicable features:
 
+- Typography: `w:sz` and `w:szCs` use half-point units and match the typography table, through direct formatting or paragraph-style inheritance. All list text and markers use 21; headings use 45, 39, 35, and 30; code blocks use 19.
 - Bullet and ordered numbering definitions, including the actual level's start value for nested lists.
 - Merges: `w:gridSpan`, `w:vMerge`.
 - Explicit widths: fixed layout and proportional `w:gridCol` values.

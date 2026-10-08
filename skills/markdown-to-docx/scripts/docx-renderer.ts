@@ -28,8 +28,9 @@ const PAGE_WIDTH_DXA = 11906;
 const PAGE_HEIGHT_DXA = 16838;
 const PAGE_MARGIN_DXA = 1440;
 const CONTENT_WIDTH_DXA = PAGE_WIDTH_DXA - PAGE_MARGIN_DXA * 2;
-const LIST_SIZE_HALF_POINTS_BY_DEPTH = [30, 26, 23, 20] as const;
-const HEADING_SIZE_SCALE = 1.5;
+const BODY_SIZE_HALF_POINTS = 21;
+const CODE_SIZE_HALF_POINTS = 19;
+const HEADING_SIZE_HALF_POINTS_BY_LEVEL = [45, 39, 35, 30] as const;
 const CSS_PX_TO_EIGHTH_POINTS = 6;
 const WORD_MIN_BORDER_SIZE_EIGHTH_POINTS = 2;
 
@@ -400,10 +401,9 @@ function paragraphXml(block: MarkdownBlock, state: RenderState): string {
 }
 
 function listTypography(level: ListLevel): ListTypography {
-  const sizeIndex = Math.min(level, LIST_SIZE_HALF_POINTS_BY_DEPTH.length - 1);
   return {
     bold: level < 2,
-    sizeHalfPoints: LIST_SIZE_HALF_POINTS_BY_DEPTH[sizeIndex]!,
+    sizeHalfPoints: BODY_SIZE_HALF_POINTS,
   };
 }
 
@@ -440,8 +440,7 @@ function headingStyle(
   after: number,
   color: string,
 ): string {
-  const listSize = LIST_SIZE_HALF_POINTS_BY_DEPTH[level - 1]!;
-  const size = Math.round(listSize * HEADING_SIZE_SCALE);
+  const size = HEADING_SIZE_HALF_POINTS_BY_LEVEL[level - 1]!;
   const border = level === 1
     ? `<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="6" w:color="${ACCENT}"/></w:pBdr>`
     : level === 2
@@ -457,7 +456,7 @@ function stylesXml(): string {
     headingStyle(3, 180, 60, INK),
     headingStyle(4, 140, 50, INK),
   ].join("");
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Segoe UI" w:hAnsi="Segoe UI" w:eastAsia="Yu Gothic UI" w:cs="Segoe UI"/><w:color w:val="${INK}"/><w:lang w:val="en-US" w:eastAsia="ja-JP"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:line="312" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="Segoe UI" w:hAnsi="Segoe UI" w:eastAsia="Yu Gothic UI" w:cs="Segoe UI"/><w:sz w:val="21"/><w:szCs w:val="21"/></w:rPr></w:style>${headings}<w:style w:type="paragraph" w:styleId="CodeBlock"><w:name w:val="Code Block"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="${CODE_BG}"/><w:pBdr><w:left w:val="single" w:sz="18" w:space="8" w:color="${ACCENT}"/></w:pBdr><w:spacing w:before="120" w:after="120" w:line="264" w:lineRule="auto"/><w:ind w:left="200" w:right="120"/></w:pPr><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:eastAsia="Yu Gothic"/><w:sz w:val="19"/><w:szCs w:val="19"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:pBdr><w:left w:val="single" w:sz="24" w:space="10" w:color="${BORDER}"/></w:pBdr><w:ind w:left="260"/><w:spacing w:before="80" w:after="80"/></w:pPr><w:rPr><w:color w:val="${MUTED}"/></w:rPr></w:style><w:style w:type="table" w:styleId="TableGrid"><w:name w:val="Table Grid"/><w:uiPriority w:val="39"/><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="${BORDER}"/><w:left w:val="single" w:sz="4" w:space="0" w:color="${BORDER}"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="${BORDER}"/><w:right w:val="single" w:sz="4" w:space="0" w:color="${BORDER}"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="${BORDER}"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="${BORDER}"/></w:tblBorders></w:tblPr></w:style></w:styles>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:styles xmlns:w="${W}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Segoe UI" w:hAnsi="Segoe UI" w:eastAsia="Yu Gothic UI" w:cs="Segoe UI"/><w:color w:val="${INK}"/><w:lang w:val="en-US" w:eastAsia="ja-JP"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:line="312" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="Segoe UI" w:hAnsi="Segoe UI" w:eastAsia="Yu Gothic UI" w:cs="Segoe UI"/><w:sz w:val="${BODY_SIZE_HALF_POINTS}"/><w:szCs w:val="${BODY_SIZE_HALF_POINTS}"/></w:rPr></w:style>${headings}<w:style w:type="paragraph" w:styleId="CodeBlock"><w:name w:val="Code Block"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="${CODE_BG}"/><w:pBdr><w:left w:val="single" w:sz="18" w:space="8" w:color="${ACCENT}"/></w:pBdr><w:spacing w:before="120" w:after="120" w:line="264" w:lineRule="auto"/><w:ind w:left="200" w:right="120"/></w:pPr><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas" w:eastAsia="Yu Gothic"/><w:sz w:val="${CODE_SIZE_HALF_POINTS}"/><w:szCs w:val="${CODE_SIZE_HALF_POINTS}"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:qFormat/><w:pPr><w:pBdr><w:left w:val="single" w:sz="24" w:space="10" w:color="${BORDER}"/></w:pBdr><w:ind w:left="260"/><w:spacing w:before="80" w:after="80"/></w:pPr><w:rPr><w:color w:val="${MUTED}"/></w:rPr></w:style><w:style w:type="table" w:styleId="TableGrid"><w:name w:val="Table Grid"/><w:uiPriority w:val="39"/><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="${BORDER}"/><w:left w:val="single" w:sz="4" w:space="0" w:color="${BORDER}"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="${BORDER}"/><w:right w:val="single" w:sz="4" w:space="0" w:color="${BORDER}"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="${BORDER}"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="${BORDER}"/></w:tblBorders></w:tblPr></w:style></w:styles>`;
 }
 
 function settingsXml(): string {

@@ -146,12 +146,13 @@ function assertTypography(xml: string, sizeHalfPoints: number, bold: boolean): v
 }
 
 function wordStyleXml(stylesXml: string, styleId: string): string {
-  const startToken = `<w:style w:type="paragraph" w:styleId="${styleId}">`;
-  const start = stylesXml.indexOf(startToken);
-  assert.notEqual(start, -1, `Word style not found: ${styleId}`);
-  const end = stylesXml.indexOf("</w:style>", start);
-  assert.notEqual(end, -1, `Word style is incomplete: ${styleId}`);
-  return stylesXml.slice(start, end + "</w:style>".length);
+  const style = stylesXml.match(/<w:style\b[^>]*>.*?<\/w:style>/g)?.find((candidate) => {
+    const openingTag = candidate.slice(0, candidate.indexOf(">"));
+    return openingTag.includes('w:type="paragraph"') &&
+      openingTag.includes(`w:styleId="${styleId}"`);
+  });
+  assert.ok(style, `Word style not found: ${styleId}`);
+  return style;
 }
 
 test("parseMarkdown creates typed blocks for the supported Markdown surface", () => {
@@ -491,7 +492,7 @@ test("renderDocx preserves backslashes inside inline code and pipe-table code sp
   assert.ok(document.includes('>a`b\\*c|d</w:t>'));
 });
 
-test("renderDocx scales heading typography from the list hierarchy", () => {
+test("renderDocx uses independent heading sizes", () => {
   const blocks = parseMarkdown(
     ["# First", "## Second", "### Third", "#### Fourth"].join("\n"),
   );
@@ -504,68 +505,107 @@ test("renderDocx scales heading typography from the list hierarchy", () => {
   assert.doesNotMatch(stylesXml, /w:styleId="Heading[56]"/);
 });
 
-test("renderDocx applies list hierarchy typography to content and markers", () => {
-  const blocks = parseMarkdown(
-    [
-      "- bullet-level-1",
-      "  - bullet-level-2",
-      "    - [x] task-level-3 with [link](https://example.test), `code`, *italic*, and ~~strike~~",
-      "      - bullet-level-4 with **explicit-bold**",
-      "        - bullet-level-5",
-      "",
-      "1. ordered-level-1",
-      "  1. ordered-level-2",
-      "    1. ordered-level-3",
-      "      1. ordered-level-4",
-      "        1. ordered-level-5",
-    ].join("\n"),
-  );
-  const buffer = renderDocx(blocks, process.cwd());
+test("renderDocx uses body size for all nine list depths and markers", () => {
+  const bulletLines = Array.from({ length: 9 }, (_value, level) =>
+    `${"  ".repeat(level)}- bullet-level-${level + 1}`);
+  const orderedLines = Array.from({ length: 9 }, (_value, level) =>
+    `${"  ".repeat(level)}1. ordered-level-${level + 1}`);
+  bulletLines[2] += " with [link](https://example.test), `code`, *italic*, and ~~strike~~";
+  bulletLines[3] += " with **explicit-bold**";
+  bulletLines[0] += " with `top-code`";
+  bulletLines[1] += " with [top-link](https://example.test)";
+  const buffer = renderDocx(parseMarkdown([
+    ...bulletLines,
+    "",
+    ...orderedLines,
+    "",
+    "- [x] completed-task",
+    "- [ ] open-task",
+  ].join("\n")), process.cwd());
   const documentXml = zipXml(buffer, "word/document.xml");
+  const stylesXml = zipXml(buffer, "word/styles.xml");
   const numberingXml = zipXml(buffer, "word/numbering.xml");
-  const expectedTypography = [
-    { sizeHalfPoints: 30, bold: true },
-    { sizeHalfPoints: 26, bold: true },
-    { sizeHalfPoints: 23, bold: false },
-    { sizeHalfPoints: 20, bold: false },
-    { sizeHalfPoints: 20, bold: false },
-  ];
-  const bulletTexts = [
-    "bullet-level-1",
-    "bullet-level-2",
-    "☑ task-level-3 with ",
-    "bullet-level-4 with ",
-    "bullet-level-5",
-  ];
+  assertTypography(wordStyleXml(stylesXml, "Normal"), 21, false);
 
-  for (const [level, typography] of expectedTypography.entries()) {
-    const bulletText = bulletTexts[level]!;
-    const bulletParagraph = paragraphXmlContaining(documentXml, bulletText);
-    const bulletRun = runXmlContaining(bulletParagraph, bulletText);
-    assertTypography(bulletRun, typography.sizeHalfPoints, typography.bold);
-
-    const orderedParagraph = paragraphXmlContaining(documentXml, `ordered-level-${level + 1}`);
-    const orderedRun = runXmlContaining(orderedParagraph, `ordered-level-${level + 1}`);
-    assertTypography(orderedRun, typography.sizeHalfPoints, typography.bold);
-
+  for (let level = 0; level < 9; level += 1) {
+    const bold = level < 2;
+    for (const kind of ["bullet", "ordered"]) {
+      const text = `${kind}-level-${level + 1}${kind === "bullet" && level < 4 ? " with " : ""}`;
+      const paragraph = paragraphXmlContaining(documentXml, text);
+      assertTypography(runXmlContaining(paragraph, text), 21, bold);
+    }
     for (const abstractId of [0, 1]) {
-      const levelXml = numberingLevelXml(
-        abstractNumberingXml(numberingXml, abstractId),
-        level,
-      );
-      assertTypography(levelXml, typography.sizeHalfPoints, typography.bold);
+      assertTypography(numberingLevelXml(
+        abstractNumberingXml(numberingXml, abstractId), level,
+      ), 21, bold);
     }
   }
 
-  const taskParagraph = paragraphXmlContaining(documentXml, "link");
-  assertTypography(runXmlContaining(taskParagraph, "☑ task-level-3 with "), 23, false);
+  const styledParagraph = paragraphXmlContaining(documentXml, "link");
   for (const text of ["link", "code", "italic", "strike"]) {
-    assertTypography(runXmlContaining(taskParagraph, text), 23, false);
+    assertTypography(runXmlContaining(styledParagraph, text), 21, false);
   }
-
+  for (const text of ["top-code", "top-link", "☑ completed-task", "☐ open-task"]) {
+    const paragraph = paragraphXmlContaining(documentXml, text);
+    assertTypography(runXmlContaining(paragraph, text), 21, true);
+  }
   const explicitBoldParagraph = paragraphXmlContaining(documentXml, "explicit-bold");
-  assertTypography(runXmlContaining(explicitBoldParagraph, "bullet-level-4 with "), 20, false);
-  assertTypography(runXmlContaining(explicitBoldParagraph, "explicit-bold"), 20, true);
+  assertTypography(runXmlContaining(explicitBoldParagraph, "explicit-bold"), 21, true);
+});
+
+test("renderDocx preserves body, table, quote, and code sizes through style inheritance", () => {
+  const blocks = parseMarkdown([
+    "Body with **body-bold**, *body-italic*, ~~body-strike~~, `body-code`, and [body-link](https://example.test).",
+    "",
+    "> Quote with `quote-code`",
+    "",
+    "| Pipe-header | Other-header |",
+    "| --- | --- |",
+    "| Pipe-cell with `cell-code` | Other-cell |",
+    "",
+    "<table>",
+    '<colgroup><col width="100"></colgroup>',
+    "<tr><th>Html-header</th></tr>",
+    "<tr><td>Html-cell</td></tr>",
+    "</table>",
+    "",
+    "```text",
+    "Fenced-code",
+    "```",
+  ].join("\n"));
+  const buffer = renderDocx(blocks, process.cwd());
+  const stylesXml = zipXml(buffer, "word/styles.xml");
+  const documentXml = zipXml(buffer, "word/document.xml");
+  const normalStyle = wordStyleXml(stylesXml, "Normal");
+  assert.match(normalStyle, /w:default="1"/);
+  assertTypography(normalStyle, 21, false);
+  assertTypography(wordStyleXml(stylesXml, "CodeBlock"), 19, false);
+  const quoteStyle = wordStyleXml(stylesXml, "Quote");
+  assert.match(quoteStyle, /<w:basedOn w:val="Normal"\/>/);
+  assert.doesNotMatch(quoteStyle, /<w:sz(?:Cs)?\b/);
+
+  for (const text of [
+    "Body with ", "body-bold", "body-italic", "body-strike", "body-code", "body-link",
+    "Quote with ", "quote-code", "Pipe-header", "Pipe-cell with ", "cell-code",
+    "Html-header", "Html-cell", "Fenced-code",
+  ]) {
+    const paragraph = paragraphXmlContaining(documentXml, text);
+    const run = runXmlContaining(paragraph, text);
+    // No direct size may mask the default or named paragraph style.
+    assert.doesNotMatch(run, /<w:sz(?:Cs)?\b/);
+    if (text === "Fenced-code") {
+      assert.match(paragraph, /<w:pStyle w:val="CodeBlock"\/>/);
+    } else if (text.startsWith("Quote") || text === "quote-code") {
+      assert.match(paragraph, /<w:pStyle w:val="Quote"\/>/);
+    } else {
+      assert.doesNotMatch(paragraph, /<w:pStyle\b/);
+    }
+    if (["body-bold", "Pipe-header", "Html-header"].includes(text)) {
+      assert.match(run, /<w:b\/>/);
+    } else {
+      assert.doesNotMatch(run, /<w:b\/>/);
+    }
+  }
 });
 
 test("renderer rejects unsupported link protocols and inline images", () => {
