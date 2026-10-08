@@ -649,6 +649,216 @@ test("renderer rejects unsupported link protocols and inline images", () => {
   );
 });
 
+function photoTable(image = '<img src="seed.png" alt="Portrait" style="width:30mm;height:40mm">'): string {
+  return [
+    '<table style="break-inside:avoid">',
+    '<colgroup><col width="120"><col width="280"><col width="120"></colgroup>',
+    '<tbody><tr><th>Name</th><td>Sample</td><td rowspan="2" valign="top">' + image + '</td></tr>',
+    '<tr><th>Address</th><td>Sample address</td></tr>',
+    '<tr><th>Email</th><td colspan="2">sample@example.test</td></tr></tbody></table>',
+  ].join("\n");
+}
+
+test("photo cells retain physical bounds, aspect ratio, spans and unique drawing IDs", () =>
+  withTempDirectory((directory) => {
+    const portrait = Buffer.from(ONE_PIXEL_PNG);
+    portrait.writeUInt32BE(146, 16);
+    portrait.writeUInt32BE(179, 20);
+    writeFileSync(path.join(directory, "seed.png"), portrait);
+    const blocks = parseMarkdown(photoTable() + "\n\n![Repeated](seed.png)");
+    assert.equal(blocks[0]!.kind, "table");
+    if (blocks[0]!.kind !== "table") assert.fail();
+    const rows = blocks[0]!.table.rows;
+    assert.equal(rows[0]!.cells[2]!.image!.widthMm, 30);
+    assert.equal(rows[1]!.cells[2]!.image, undefined);
+    const buffer = renderDocx(blocks, directory);
+    const xml = zipXml(buffer, "word/document.xml");
+    const extent = /<wp:extent cx="(\d+)" cy="(\d+)"\/>/.exec(xml)!;
+    assert.equal(Number(extent[1]), 1_080_000);
+    assert.equal(Number(extent[2]), Math.round(1_080_000 * 179 / 146));
+    assert.match(xml, /<w:vMerge w:val="restart"\/>/);
+    assert.match(xml, /<w:vMerge w:val="continue"\/>/);
+    assert.match(xml, /<w:gridSpan w:val="2"\/>/);
+    assert.equal(xml.match(/<w:drawing>/g)?.length, 2);
+    assert.deepEqual([...xml.matchAll(/<wp:docPr id="(\d+)"/g)].map((match) => match[1]), ["1", "2"]);
+    assert.equal(zipXml(buffer, "word/_rels/document.xml.rels").match(/Type="[^"]+\/image"/g)?.length, 1);
+    assert.deepEqual(storedZipEntry(buffer, "word/media/image1.png"), portrait);
+  }));
+
+test("photo cell syntax rejects mixed content, multiple images and unsupported dimensions", () => {
+  const image = '<img src="seed.png" alt="Photo" style="width:30mm;height:40mm">';
+  for (const invalid of [
+    "Text " + image, image + " Text", image + image, "<br>" + image, image + "<br>",
+    image.replace("30mm", "30px"), image.replace("30mm", "0mm"),
+    image.replace("30mm", "-1mm"), image.replace("30mm", "NaNmm"),
+    image.replace(";height:40mm", ""), image.replace("height:40mm", "height:40mm;width:20mm"),
+    image.replace("height:40mm", "height:40mm;float:right"),
+    image.replace(' alt="Photo"', ""), image.replace("<img", '<img onclick="bad"'),
+  ]) assert.throws(() => parseMarkdown(photoTable(invalid)), SyntaxError);
+  assert.throws(() => parseMarkdown(photoTable(image).replace(
+    '<td rowspan="2" valign="top">' + image + '</td>',
+    '<th rowspan="2" valign="top">' + image + '</th>',
+  )), /requires its own td cell/);
+});
+
+test("photo cell rendering rejects oversized boxes and invalid local image sources", () =>
+  withTempDirectory((directory) => {
+    writeFileSync(path.join(directory, "seed.png"), ONE_PIXEL_PNG);
+    for (const dimension of ["width:50mm;height:40mm", "width:30mm;height:400mm", "width:.000001mm;height:40mm"]) {
+      assert.throws(() => renderDocx(parseMarkdown(photoTable().replace("width:30mm;height:40mm", dimension)), directory), /available cell or page space/);
+    }
+    for (const [target, error] of [
+      ["https://example.test/photo.png", /Remote and data/],
+      ["data:image/png;base64,AAAA", /Remote and data/],
+      ["photo.jpg", /Only PNG/], ["missing.png", /PNG image does not exist/],
+    ] as const) assert.throws(() => renderDocx(parseMarkdown(photoTable().replace("seed.png", target)), directory), error);
+    const invalid = Buffer.from(ONE_PIXEL_PNG);
+    invalid.writeUInt32BE(0, 16);
+    writeFileSync(path.join(directory, "seed.png"), invalid);
+    assert.throws(() => renderDocx(parseMarkdown(photoTable()), directory), /PNG dimensions must be positive/);
+  }));
+
+test("photo cells survive two-pass regeneration and follow explicit Markdown photo edits", () =>
+  withTempDirectory((directory) => {
+    const input = path.join(directory, "input.md");
+    const output = path.join(directory, "output.docx");
+    writeFileSync(path.join(directory, "seed.png"), ONE_PIXEL_PNG);
+    writeFileSync(input, photoTable());
+    synchronizeMarkdownToDocx(input, output);
+    const second = synchronizeMarkdownToDocx(input, output);
+    assert.deepEqual(second.importedImagePaths, []);
+    assert.equal(second.markdownChanged, false);
+    assert.equal(readFileSync(input, "utf8"), photoTable());
+    const replacement = Buffer.concat([ONE_PIXEL_PNG, Buffer.from("replacement")]);
+    writeFileSync(path.join(directory, "replacement.png"), replacement);
+    const edited = photoTable().replace("seed.png", "replacement.png").replace("Portrait", "Updated").replace("30mm", "25mm");
+    writeFileSync(input, edited);
+    assert.equal(synchronizeMarkdownToDocx(input, output).markdownChanged, false);
+    assert.equal(readFileSync(input, "utf8"), edited);
+    assert.deepEqual(storedZipEntry(readFileSync(output), "word/media/image1.png"), replacement);
+    assert.match(zipXml(readFileSync(output), "word/document.xml"), /descr="Updated"/);
+    assert.equal(existsSync(path.join(directory, "images")), false);
+  }));
+
+test("Japanese DOCX image records use UTF-8 for table validation and body imports", () =>
+  withTempDirectory((directory) => {
+    const localized = path.join(directory, "日本語");
+    mkdirSync(localized);
+    const input = path.join(localized, "履歴書.md");
+    const output = path.join(localized, "履歴書.docx");
+    writeFileSync(path.join(localized, "seed.png"), ONE_PIXEL_PNG);
+    const table = photoTable().replace("Portrait", "証明写真").replace("Sample", "氏名");
+    writeFileSync(input, table + "\n\n![証明写真](seed.png)\n\n終わり");
+    synchronizeMarkdownToDocx(input, output);
+    assert.equal(synchronizeMarkdownToDocx(input, output).markdownChanged, false);
+    writeFileSync(input, table + "\n\n終わり");
+    assert.equal(synchronizeMarkdownToDocx(input, output).importedImagePaths.length, 1);
+    assert.match(readFileSync(input, "utf8"), /!\[証明写真\]/);
+    assert.equal(synchronizeMarkdownToDocx(input, output).markdownChanged, false);
+  }));
+
+test("moving an existing body photo into a new cell does not reimport or duplicate it", () =>
+  withTempDirectory((directory) => {
+    const input = path.join(directory, "input.md");
+    const output = path.join(directory, "output.docx");
+    writeFileSync(path.join(directory, "seed.png"), ONE_PIXEL_PNG);
+    writeFileSync(input, "# Resume\n\n![Portrait](seed.png)\n\n" + photoTable(""));
+    synchronizeMarkdownToDocx(input, output);
+    const moved = "# Resume\n\n" + photoTable();
+    writeFileSync(input, moved);
+    const result = synchronizeMarkdownToDocx(input, output);
+    assert.equal(result.markdownChanged, false);
+    assert.deepEqual(result.importedImagePaths, []);
+    assert.equal(readFileSync(input, "utf8"), moved);
+    assert.equal(zipXml(readFileSync(output), "word/document.xml").match(/<w:drawing>/g)?.length, 1);
+    assert.equal(synchronizeMarkdownToDocx(input, output).markdownChanged, false);
+  }));
+
+test("represented table photos do not suppress missing standalone occurrences of the same image", () =>
+  withTempDirectory((directory) => {
+    const input = path.join(directory, "input.md");
+    const output = path.join(directory, "output.docx");
+    writeFileSync(path.join(directory, "seed.png"), ONE_PIXEL_PNG);
+    writeFileSync(input, photoTable() + "\n\n![Repeated](seed.png)\n\nAfter");
+    synchronizeMarkdownToDocx(input, output);
+    writeFileSync(input, photoTable() + "\n\nAfter");
+    const result = synchronizeMarkdownToDocx(input, output);
+    assert.equal(result.importedImagePaths.length, 1);
+    assert.equal(zipXml(readFileSync(output), "word/document.xml").match(/<w:drawing>/g)?.length, 2);
+    assert.equal(synchronizeMarkdownToDocx(input, output).markdownChanged, false);
+  }));
+
+test("DOCX-only or ambiguous table photos fail without changing user files", () =>
+  withTempDirectory((directory) => {
+    const input = path.join(directory, "input.md");
+    const output = path.join(directory, "output.docx");
+    writeFileSync(path.join(directory, "seed.png"), ONE_PIXEL_PNG);
+    for (const [initial, edited] of [
+      [photoTable(), photoTable("")],
+      [photoTable() + "\n\n" + photoTable(), photoTable() + "\n\n" + photoTable()],
+      [photoTable(), photoTable().replace("Sample address", "Changed address")],
+    ]) {
+      rmSync(output, { force: true });
+      writeFileSync(input, initial!);
+      synchronizeMarkdownToDocx(input, output);
+      const original = readFileSync(output);
+      writeFileSync(input, edited!);
+      assert.throws(() => synchronizeMarkdownToDocx(input, output), /DOCX-only table images|map uniquely/);
+      assert.equal(readFileSync(input, "utf8"), edited);
+      assert.deepEqual(readFileSync(output), original);
+      assert.equal(existsSync(path.join(directory, "images")), false);
+    }
+  }));
+
+test("unsupported existing DOCX table drawings fail atomically", () =>
+  withTempDirectory((directory) => {
+    const input = path.join(directory, "input.md");
+    const output = path.join(directory, "output.docx");
+    writeFileSync(path.join(directory, "seed.png"), ONE_PIXEL_PNG);
+    for (const transform of [
+      (xml: string) => xml.replace("<wp:inline ", "<wp:anchor ").replace("</wp:inline>", "</wp:anchor>"),
+      (xml: string) => xml.replace('<a:blip r:embed="rId10"/>', '<a:blip r:embed="rId10"/><a:blip r:embed="rId10"/>'),
+      (xml: string) => xml.replace("<w:drawing>", '<w:t>Mixed text</w:t><w:drawing>'),
+    ]) {
+      rmSync(output, { force: true });
+      writeFileSync(input, photoTable());
+      synchronizeMarkdownToDocx(input, output);
+      const modified = transform(zipXml(readFileSync(output), "word/document.xml"));
+      const script = [
+        "import os, sys, zipfile",
+        "source = sys.argv[1]",
+        "xml = sys.stdin.buffer.read()",
+        "with zipfile.ZipFile(source) as zin, zipfile.ZipFile(source + '.tmp', 'w') as zout:",
+        "    for info in zin.infolist():",
+        "        zout.writestr(info, xml if info.filename == 'word/document.xml' else zin.read(info.filename))",
+        "os.replace(source + '.tmp', source)",
+      ].join("\n");
+      const changed = spawnSync(pythonExecutable(), ["-c", script, output], { input: modified, encoding: "utf8" });
+      assert.equal(changed.status, 0, changed.stderr);
+      const original = readFileSync(output);
+      assert.throws(() => synchronizeMarkdownToDocx(input, output), /image-only cell with one inline image/);
+      assert.deepEqual(readFileSync(output), original);
+      assert.equal(readFileSync(input, "utf8"), photoTable());
+      assert.equal(existsSync(path.join(directory, "images")), false);
+    }
+  }));
+
+test("invalid photo edits leave the existing DOCX and Markdown untouched", () =>
+  withTempDirectory((directory) => {
+    const input = path.join(directory, "input.md");
+    const output = path.join(directory, "output.docx");
+    writeFileSync(path.join(directory, "seed.png"), ONE_PIXEL_PNG);
+    writeFileSync(input, photoTable());
+    synchronizeMarkdownToDocx(input, output);
+    const original = readFileSync(output);
+    const invalid = photoTable().replace("30mm", "300mm");
+    writeFileSync(input, invalid);
+    assert.throws(() => synchronizeMarkdownToDocx(input, output), /available cell or page space/);
+    assert.deepEqual(readFileSync(output), original);
+    assert.equal(readFileSync(input, "utf8"), invalid);
+    assert.equal(existsSync(path.join(directory, "images")), false);
+  }));
+
 test("synchronizeMarkdownToDocx resolves PNG images relative to the Markdown file", () =>
   withTempDirectory((directory) => {
     const imageDirectory = path.join(directory, "images");

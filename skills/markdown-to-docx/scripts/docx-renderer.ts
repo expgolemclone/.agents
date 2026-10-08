@@ -277,11 +277,13 @@ function tableCellXml(
     .join("");
   const borders = borderElements === "" ? "" : `<w:tcBorders>${borderElements}</w:tcBorders>`;
   const verticalAlignment = cell.verticalAlign ?? "center";
-  const paragraphAlignment = cell.align
-    ? `<w:jc w:val="${cell.align === "justify" ? "both" : cell.align}"/>`
+  const alignment = cell.align ?? (cell.image ? "center" : undefined);
+  const paragraphAlignment = alignment
+    ? `<w:jc w:val="${alignment === "justify" ? "both" : alignment}"/>`
     : "";
   const content = cell.verticalMerge === "continue"
     ? ""
+    : cell.image ? tableImageXml(cell.image, state, width)
     : inlineXml(cell.text, state, { bold: cell.header, color: cell.textColor });
   const pagination = keepWithNext ? "<w:keepNext/>" : "";
   return `<w:tc><w:tcPr><w:tcW w:w="${width}" w:type="dxa"/>${span}${merge}${fill}${borders}<w:vAlign w:val="${verticalAlignment}"/><w:tcMar><w:top w:w="80" w:type="dxa"/><w:left w:w="120" w:type="dxa"/><w:bottom w:w="80" w:type="dxa"/><w:right w:w="120" w:type="dxa"/></w:tcMar></w:tcPr><w:p><w:pPr>${pagination}${paragraphAlignment}<w:spacing w:before="0" w:after="0" w:line="280" w:lineRule="auto"/></w:pPr>${content}</w:p></w:tc>`;
@@ -332,7 +334,10 @@ function parsePngSize(data: Buffer, sourcePath: string): { widthPx: number; heig
   if (data.length < 24 || data.toString("ascii", 1, 4) !== "PNG") {
     throw new Error(`Image is not a valid PNG file: ${sourcePath}`);
   }
-  return { widthPx: data.readUInt32BE(16), heightPx: data.readUInt32BE(20) };
+  const widthPx = data.readUInt32BE(16);
+  const heightPx = data.readUInt32BE(20);
+  if (widthPx === 0 || heightPx === 0) throw new Error(`PNG dimensions must be positive: ${sourcePath}`);
+  return { widthPx, heightPx };
 }
 
 function registerImage(markdownPath: string, state: RenderState): ImageInfo {
@@ -353,19 +358,32 @@ function registerImage(markdownPath: string, state: RenderState): ImageInfo {
   return image;
 }
 
+function imageDrawingXml(image: ImageInfo, alt: string, state: RenderState, widthEmu: number, heightEmu: number): string {
+  if (widthEmu < 1 || heightEmu < 1) throw new RangeError("Image display dimensions must be positive.");
+  const docPrId = state.drawingId++;
+  return `<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${widthEmu}" cy="${heightEmu}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${docPrId}" name="Picture ${docPrId}" descr="${escapeAttr(alt)}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="${escapeAttr(path.basename(image.sourcePath))}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${image.id}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${widthEmu}" cy="${heightEmu}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>`;
+}
+
 function imageParagraphXml(markdownPath: string, alt: string, state: RenderState): string {
   const image = registerImage(markdownPath, state);
-  const maxWidthEmu = CONTENT_WIDTH_DXA * 635;
-  const maxHeightEmu = (PAGE_HEIGHT_DXA - PAGE_MARGIN_DXA * 2 - 1440) * 635;
-  let widthEmu = Math.round(image.widthPx * 9525);
-  let heightEmu = Math.round(image.heightPx * 9525);
-  const ratio = Math.min(1, maxWidthEmu / widthEmu, maxHeightEmu / heightEmu);
-  if (ratio < 1) {
-    widthEmu = Math.round(widthEmu * ratio);
-    heightEmu = Math.round(heightEmu * ratio);
+  const width = image.widthPx * 9525;
+  const height = image.heightPx * 9525;
+  const ratio = Math.min(1, CONTENT_WIDTH_DXA * 635 / width,
+    (PAGE_HEIGHT_DXA - PAGE_MARGIN_DXA * 2 - 1440) * 635 / height);
+  return `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="80" w:after="120"/></w:pPr>${imageDrawingXml(image, alt, state, Math.round(width * ratio), Math.round(height * ratio))}</w:p>`;
+}
+
+function tableImageXml(image: NonNullable<TableCell["image"]>, state: RenderState, cellWidth: number): string {
+  const width = Math.round(image.widthMm * 36000);
+  const height = Math.round(image.heightMm * 36000);
+  if (width < 1 || height < 1 || width > (cellWidth - 240) * 635 ||
+      height > (PAGE_HEIGHT_DXA - PAGE_MARGIN_DXA * 2 - 160) * 635) {
+    throw new RangeError("Image bounding box exceeds the available cell or page space.");
   }
-  const docPrId = state.drawingId++;
-  return `<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="80" w:after="120"/></w:pPr><w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0"><wp:extent cx="${widthEmu}" cy="${heightEmu}"/><wp:effectExtent l="0" t="0" r="0" b="0"/><wp:docPr id="${docPrId}" name="Picture ${docPrId}" descr="${escapeAttr(alt)}"/><wp:cNvGraphicFramePr><a:graphicFrameLocks noChangeAspect="1"/></wp:cNvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:nvPicPr><pic:cNvPr id="0" name="${escapeAttr(path.basename(image.sourcePath))}"/><pic:cNvPicPr/></pic:nvPicPr><pic:blipFill><a:blip r:embed="${image.id}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill><pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${widthEmu}" cy="${heightEmu}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>`;
+  const registered = registerImage(image.path, state);
+  const ratio = Math.min(width / registered.widthPx, height / registered.heightPx);
+  return imageDrawingXml(registered, image.alt, state,
+    Math.round(registered.widthPx * ratio), Math.round(registered.heightPx * ratio));
 }
 
 function paragraphXml(block: MarkdownBlock, state: RenderState): string {

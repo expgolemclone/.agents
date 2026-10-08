@@ -22,8 +22,11 @@ export type HeadingLevel = 1 | 2 | 3 | 4;
 export type ListLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export type ListKind = "bullet" | "ordered";
 export type VerticalMerge = "restart" | "continue";
+export type TableImage = { path: string; alt: string; widthMm: number; heightMm: number };
+
 export type TableCell = {
   text: string;
+  image?: TableImage;
   header: boolean;
   colSpan: number;
   rowSpan: number;
@@ -74,6 +77,7 @@ export type MarkdownBlock = SourceRange & (
 type CodeFence = { marker: string; info: string };
 type SourceCell = {
   text: string;
+  image?: TableImage;
   header: boolean;
   colSpan: number;
   rowSpan: number;
@@ -294,6 +298,7 @@ function materializeTable(
       }
       cells.push({
         text: continuation ? "" : occupied.cell.text,
+        image: continuation ? undefined : occupied.cell.image,
         header: occupied.cell.header,
         colSpan: occupied.cell.colSpan,
         rowSpan: occupied.cell.rowSpan,
@@ -407,6 +412,9 @@ export function parseHtmlTable(html: string, lineNumber: number): MarkdownTable 
           .replace(/[ \t]*\n[ \t]*/g, " ")
           .replace(/\u000b/g, "\n")
           .trim();
+        if (currentCell.image && currentCell.text !== "") {
+          throw new SyntaxError(`Image cells cannot mix text and images near line ${lineNumber}.`);
+        }
         currentRow.cells.push(currentCell);
         currentCell = undefined;
         cellText = [];
@@ -437,11 +445,38 @@ export function parseHtmlTable(html: string, lineNumber: number): MarkdownTable 
       "th",
       "td",
       "br",
+      "img",
     ]);
     if (!allowedTags.has(tag)) throw new SyntaxError(`Unsupported <${tag}> inside a table near line ${lineNumber}.`);
 
+    if (tag === "img") {
+      if (!currentCell || stack.at(-1) !== "td" || currentCell.image || cellText.join("").includes("\u000b")) {
+        throw new SyntaxError(`An image requires its own td cell near line ${lineNumber}.`);
+      }
+      const unexpected = Object.keys(attributes).filter((name) => !["src", "alt", "style"].includes(name));
+      if (unexpected.length > 0 || !attributes.src || attributes.alt === undefined || !attributes.style) {
+        throw new SyntaxError(`An img requires only src, alt and width/height style near line ${lineNumber}.`);
+      }
+      const dimensions = new Map<string, number>();
+      for (const { property, value } of parseCssDeclarations(attributes.style, "image style", `near line ${lineNumber}`)) {
+        if (!["width", "height"].includes(property) || !/^(?:\d+(?:\.\d+)?|\.\d+)mm$/.test(value)) {
+          throw new SyntaxError(`Image dimensions must be positive mm values near line ${lineNumber}.`);
+        }
+        const dimension = Number.parseFloat(value);
+        if (!Number.isFinite(dimension) || dimension <= 0) {
+          throw new SyntaxError(`Image dimensions must be positive mm values near line ${lineNumber}.`);
+        }
+        dimensions.set(property, dimension);
+      }
+      if (dimensions.size !== 2) throw new SyntaxError(`Image width and height are required near line ${lineNumber}.`);
+      currentCell.image = {
+        path: attributes.src, alt: attributes.alt,
+        widthMm: dimensions.get("width")!, heightMm: dimensions.get("height")!,
+      };
+      continue;
+    }
     if (tag === "br") {
-      if (!currentCell) throw new SyntaxError(`<br> must be inside a table cell near line ${lineNumber}.`);
+      if (!currentCell || currentCell.image) throw new SyntaxError(`<br> requires a text-only table cell near line ${lineNumber}.`);
       if (Object.keys(attributes).length > 0) throw new SyntaxError(`<br> does not accept attributes near line ${lineNumber}.`);
       cellText.push("\u000b");
       continue;

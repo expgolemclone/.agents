@@ -12,6 +12,7 @@ import {
   normalizeVisibleText,
   parseMarkdown,
   type MarkdownBlock,
+  type TableImage,
 } from "./markdown-parser.ts";
 
 const SCRIPT_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
@@ -24,7 +25,10 @@ type DocxImageRecord = {
   alt: string;
   staged_path: string;
 };
-type DocxRecord = DocxAnchorRecord | DocxImageRecord;
+type DocxTableImageRecord = Omit<DocxImageRecord, "kind"> & {
+  kind: "table-image"; signature: string; row: number; column: number;
+};
+type DocxRecord = DocxAnchorRecord | DocxImageRecord | DocxTableImageRecord;
 type ExtractorResult = { records: DocxRecord[] };
 
 type MarkdownAnchorRecord = {
@@ -85,7 +89,7 @@ function parseExtractorResult(stdout: string, stagingDirectory: string): Extract
       }
       return { kind: "anchor", signature: raw.signature };
     }
-    if (raw.kind === "image") {
+    if (raw.kind === "image" || raw.kind === "table-image") {
       if (!("digest" in raw)) {
         throw new Error(`DOCX image extractor omitted an image digest at index ${index}.`);
       }
@@ -101,7 +105,16 @@ function parseExtractorResult(stdout: string, stagingDirectory: string): Extract
         throw new Error(`DOCX image extractor returned an invalid staged filename: ${raw.staged_path}`);
       }
       const stagedPath = path.join(stagingDirectory, raw.staged_path);
-      return { kind: "image", digest: raw.digest, alt: raw.alt, staged_path: stagedPath };
+      const image = { digest: raw.digest, alt: raw.alt, staged_path: stagedPath };
+      if (raw.kind === "table-image") {
+        if (!("signature" in raw) || typeof raw.signature !== "string" ||
+            !("row" in raw) || typeof raw.row !== "number" || !Number.isSafeInteger(raw.row) || raw.row < 0 ||
+            !("column" in raw) || typeof raw.column !== "number" || !Number.isSafeInteger(raw.column) || raw.column < 0) {
+          throw new Error(`DOCX image extractor returned invalid table coordinates at index ${index}.`);
+        }
+        return { kind: "table-image", ...image, signature: raw.signature, row: raw.row, column: raw.column };
+      }
+      return { kind: "image", ...image };
     }
     throw new Error(`DOCX image extractor returned an unknown record kind at index ${index}.`);
   });
@@ -267,6 +280,33 @@ function groupByGap<T>(images: Array<PositionedImage<T>>): Map<string, Array<Pos
   return result;
 }
 
+function validateTableImages(records: DocxRecord[], sourceRecords: MarkdownRecord[]): Set<TableImage> {
+  const represented = new Set<TableImage>();
+  const anchors = commonUniqueAnchors(records, sourceRecords);
+  const seen = new Set<string>();
+  for (const record of records) {
+    if (record.kind !== "table-image") continue;
+    const block = anchors.get(record.signature)?.block;
+    const key = `${record.signature}\u0000${record.row}\u0000${record.column}`;
+    if (!block || block.kind !== "table" || seen.has(key)) {
+      throw new Error("DOCX table image does not map uniquely to a Markdown image cell.");
+    }
+    seen.add(key);
+    let column = 0;
+    const cell = block.table.rows[record.row]?.cells.find((candidate) => {
+      const origin = column;
+      column += candidate.colSpan;
+      return origin === record.column;
+    });
+    if (!cell?.image) {
+      throw new Error("DOCX-only table images cannot be imported; declare the image in its Markdown cell.");
+    }
+    represented.add(cell.image);
+    // The represented cell's Markdown path, dimensions and alt text own regeneration.
+  }
+  return represented;
+}
+
 export function planDocxImageSynchronization(
   markdown: string,
   markdownPath: string,
@@ -275,18 +315,26 @@ export function planDocxImageSynchronization(
   const stagingDirectory = mkdtempSync(path.join(tmpdir(), "markdown-to-docx-sync-"));
   try {
     const extracted = extractDocxRecords(docxPath, stagingDirectory);
+    const markdownDirectory = path.dirname(path.resolve(markdownPath));
+    const sourceRecords = markdownRecords(markdown, markdownDirectory);
+    const represented = validateTableImages(extracted.records, sourceRecords);
     const docxImages = extracted.records.filter(
       (record): record is DocxImageRecord => record.kind === "image",
     );
     if (docxImages.length === 0) return { markdown, importedImagePaths: [], imageFiles: [] };
 
-    const markdownDirectory = path.dirname(path.resolve(markdownPath));
-    const sourceRecords = markdownRecords(markdown, markdownDirectory);
     const sourceImages = sourceRecords.filter(
       (record): record is MarkdownImageRecord => record.kind === "image",
     );
     const docxCountByDigest = counts(docxImages.map((image) => image.digest));
-    const sourceCountByDigest = counts(sourceImages.map((image) => image.digest));
+    const newCellDigests = sourceRecords.flatMap((record) =>
+      record.kind === "anchor" && record.block.kind === "table"
+        ? record.block.table.rows.flatMap((row) => row.cells.flatMap((cell) =>
+          cell.image && !represented.has(cell.image)
+            ? [sha256(readFileSync(resolveMarkdownImagePath(cell.image.path, markdownDirectory)))] : []))
+        : []);
+    // A body image deliberately moved into a new Markdown photo cell is already represented.
+    const sourceCountByDigest = counts([...sourceImages.map((image) => image.digest), ...newCellDigests]);
     const remainingByDigest = new Map<string, number>();
     for (const [digest, count] of docxCountByDigest) {
       const missing = Math.max(0, count - (sourceCountByDigest.get(digest) ?? 0));

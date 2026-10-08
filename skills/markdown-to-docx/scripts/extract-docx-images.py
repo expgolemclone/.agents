@@ -186,6 +186,40 @@ def table_signature(table: ElementTree.Element) -> str:
     return f"table:{separator.join(rows)}"
 
 
+def table_images(
+    table: ElementTree.Element,
+    package: zipfile.ZipFile,
+    relationships: dict[str, tuple[str, str, bool]],
+    staging_directory: Path,
+) -> list[dict[str, object]]:
+    records: list[dict[str, object]] = []
+    signature = table_signature(table)
+    for row_index, row in enumerate(table.findall(qname(W, "tr"))):
+        column = 0
+        for cell in row.findall(qname(W, "tc")):
+            blips = drawing_blips(cell)
+            if blips:
+                paragraphs = cell.findall(qname(W, "p"))
+                if (len(blips) != 1 or len(paragraphs) != 1 or visible_text(cell)
+                        or cell.find(f".//{qname(W, 'tbl')}") is not None
+                        or cell.find(f".//{qname(W, 'txbxContent')}") is not None
+                        or len(cell.findall(f".//{qname(WP, 'inline')}")) != 1
+                        or cell.find(f".//{qname(WP, 'anchor')}") is not None):
+                    raise ValueError("DOCX table images require an image-only cell with one inline image.")
+                relationship_id, alt = blips[0]
+                digest, staged_path = staged_image(
+                    package, relationships, relationship_id, staging_directory
+                )
+                records.append({
+                    "kind": "table-image", "signature": signature,
+                    "row": row_index, "column": column,
+                    "digest": digest, "alt": alt, "staged_path": staged_path,
+                })
+            span = cell.find(f"{qname(W, 'tcPr')}/{qname(W, 'gridSpan')}")
+            column += int(span.get(qname(W, "val"), "1")) if span is not None else 1
+    return records
+
+
 def inspect_docx(input_path: Path, staging_directory: Path) -> dict[str, object]:
     if input_path.suffix.lower() != ".docx":
         raise ValueError(f"DOCX input must use the .docx extension: {input_path}")
@@ -206,7 +240,7 @@ def inspect_docx(input_path: Path, staging_directory: Path) -> dict[str, object]
             if body is None:
                 raise ValueError("DOCX document.xml does not contain w:body.")
 
-            records: list[dict[str, str]] = []
+            records: list[dict[str, object]] = []
             for child in body:
                 if child.tag == qname(W, "p"):
                     blips = drawing_blips(child)
@@ -232,13 +266,8 @@ def inspect_docx(input_path: Path, staging_directory: Path) -> dict[str, object]
                             }
                         )
                 elif child.tag == qname(W, "tbl"):
-                    if child.find(f".//{qname(A, 'blip')}") is not None or child.find(
-                        f".//{qname(V, 'imagedata')}"
-                    ) is not None:
-                        raise ValueError(
-                            "Images in DOCX tables cannot be represented in supported Markdown."
-                        )
                     records.append({"kind": "anchor", "signature": table_signature(child)})
+                    records.extend(table_images(child, package, relationships, staging_directory))
                 elif child.tag == qname(W, "sectPr"):
                     continue
                 elif child.find(f".//{qname(A, 'blip')}") is not None or child.find(
@@ -251,6 +280,8 @@ def inspect_docx(input_path: Path, staging_directory: Path) -> dict[str, object]
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(
         description="Inspect DOCX body images and print one compact JSON result."
     )
