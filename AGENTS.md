@@ -6,12 +6,13 @@
 - codeとdocumentを簡潔に保つ. 二重管理, fallback, overrideは禁止.
 - 問題のある指示は指摘する. 推測できない事項だけ質問し, 番号付きの推奨案を1にする.
 - 作業は完了まで進め, 阻害要因は報告する. 画像生成と手動GUI操作は禁止.
-- `plan` 指定後は `do` まで調査と提案だけ行う. 調査用fileや検証は可. 実装, 運用変更, commit, pushはしない. `do` 以外は実装許可としない.
+- `plan` とuserが入力した場合, `do` まで調査と提案だけ行う. 調査用fileや検証は可. 実装, 運用変更, commit, pushはしない.
 
 ## Preparation
 
 - `$HOME/local-repository-map/RepositoryMap.psm1` の `Read-LocalRepositoryMap` で対象を特定する.
-- 関連する `RULES.md`, `SKILL.md` を読む. 言語を問わずpackage, tool, runtimeの導入から実行, 更新, 廃止, 検証まで `expgolemclone/envx/RULES.md` に従う.
+- 関連する `RULES.md`, `SKILL.md` を読む.
+- 言語を問わずpackage, tool, runtimeの導入から実行, 更新, 廃止, 検証まで `expgolemclone/envx/RULES.md` に従う.
 
 ## Design and Testing
 
