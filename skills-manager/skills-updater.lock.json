@@ -8,13 +8,6 @@
       "repository": "kozz36/frontend-designer-skill",
       "source_path": "skills/frontend-designer"
     },
-    "minimax-xlsx": {
-      "commit": "60aaae52bb2af8162732751a4332f62a5fef518b",
-      "content_sha256": "72f27b88e6fe9944e0ab3e58ce1b8144bf81b415fda847c9300b90b83d13cdfc",
-      "ref": "main",
-      "repository": "MiniMax-AI/skills",
-      "source_path": "skills/minimax-xlsx"
-    },
     "ux-flow-designer": {
       "commit": "4d2052b3cb69884758a8f1f823ed9ecbb571c60a",
       "content_sha256": "edd824d57753d329124ed7e0bd5805744ac0d9e520ec17e5e9b5cb0dea6a60d7",
