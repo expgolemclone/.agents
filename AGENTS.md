@@ -22,13 +22,8 @@
 ## Workflow
 
 - gitではなくjjを使い, Conventional Commitsに従う.
-- taskごとに最新remote `main` を `C:/dev/tmp/<owner>--<repo>--<task>--<id>/repository/` へ独立cloneして作業する. owner/repoはRepositoryMapの名前, taskは短いslug, idは8桁random IDとする.
-- `$HOME/.agents/workflow/AgentWorkflow.psm1` をimportし, `Get-AgentWorkflowHelp` で使う. `workflow/` のcodeはトラブル調査時だけ読む.
-- 複数工程の `PLAN.md` と一時出力はtask領域のrepository外に置く. 通常taskのPLANは公開しない.
-- 引き継ぎ時だけcodeとPLANを `handoff/<task-id>` に公開する. helperで未担当taskを探し, 所有権取得後だけ本文を読む. 突然終了の救出はしない.
-- fetch, rebase, test後にcodeだけ `main` へ前進pushする. 更新競合時は繰り返す. 引き継ぎ完了後は該当branchを削除する.
-- push後にRepositoryMap登録先を排他で最新 `main` に同期する. 既存変更があれば停止する.
-- 全完了後だけtask領域を削除する. 未完了領域は一括清掃しない.
+- `$HOME/.agents/workflow/AgentWorkflow.psm1` をimportし, `Get-AgentWorkflowHelp` に従ってtask開始, 引き継ぎ, 完了, 同期, cleanupを行う. `workflow/` のcodeはトラブル調査時だけ読む.
+- 複数工程の `PLAN.md` と一時出力はtask領域のrepository外に置く. PLANの公開は引き継ぎ時だけとする.
 
 ## Constraints
 
