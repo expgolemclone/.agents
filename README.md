@@ -2,7 +2,7 @@
 
 - `AGENTS.md`: global Pi instructions.
 - `settings.json`: provider, model, thinking level and OpenAI service tier. The `.pi` extension reads this file directly.
-- `skills/`: repo-independent Agent Skills discovered by Pi. Repository-specific skills belong in their owner's `skills/`, selected by project `.pi/settings.json` with `"skills": ["../skills"]`.
+- `skills/`: repo-independent Agent Skills discovered by Pi. Repository-specific skills belong in their owner's `skills/`, selected by project `.pi/settings.json` with `"skills": ["../skills"]`. Do not install, copy or link consumer-specific skills into this shared directory. Retired shared copies remain recoverable from jj history; migrate them only on a PC allowed to work on the owning repository.
 - The envx operational skill is owned by the mapped envx repository's `skills/envx/`; Pi user setup references that source directly because environment operations span projects.
 - `skills-manager/`: synchronizes external skills from GitHub.
 - `workflow/`: shared jj task helpers. Import `workflow/AgentWorkflow.psm1` and run `Get-AgentWorkflowHelp`; do not read implementation unless troubleshooting.
