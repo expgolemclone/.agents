@@ -2,14 +2,7 @@
 
 This manager synchronizes external Agent Skills from GitHub into the `skills` folder in the same `.agents` repository.
 
-## Files
-
-- `skills-updater.py`: CLI for checking for updates and synchronizing skills.
-- `skills-updater.json`: The sole configuration for synchronization targets and their sources.
-- `skills-updater.lock.json`: Automatically generated file recording resolved commits and content hashes.
-- `tests/`: Tests for configuration validation, archive extraction, and transaction rollback.
-
-Keep the source list only in `skills-updater.json`; do not duplicate it in this README. Scheduled Task schedules and execution actions are managed only in the `task-scheduler-management` repository.
+Configure sources in `skills-updater.json`. Scheduled execution is managed in `task-scheduler-management`.
 
 ## Usage
 
