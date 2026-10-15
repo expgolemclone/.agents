@@ -2,7 +2,7 @@
   "schema_version": 1,
   "sources": {
     "markdown-to-docx": {
-      "commit": "f91251b2b0bd2c5cce4923703226489bc2f19113",
+      "commit": "4391d8a211cdfb38b0d53044f90b4d5eaa60d375",
       "content_sha256": "75a77b1fabceff054ba116799e9982ee9eec1684107fd7483fcf07fe38939d32",
       "ref": "main",
       "repository": "expgolemclone/markdown-to-docx",
