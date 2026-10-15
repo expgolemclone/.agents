@@ -46,11 +46,11 @@ What matters is achieving the goal, not reasoning exactly as the user instructed
 
 - Duplicate management, duplicate implementations, inconsistent terminology, fallbacks, and overrides are prohibited.
 - Keep documentation as short as possible. Remove redundancy and link to authoritative sources instead of repeating them.
-- Document code specifications only when explicitly requested.
+- Do not duplicate code specifications in documentation. Add such documentation only when explicitly requested.
 
-- Do not cling to backward compatibility. Start by removing things.
-  - Make it simple, even if you have to tear down the existing design. Do not prioritize preserving what exists through minimal changes.
-  - Apply essentialism. Do not keep something merely because it already exists. Ask whether you would add it again if starting from scratch.
+- Do not cling to backward compatibility. Delete first.
+  - Do not preserve the existing design through minimal changes. Tear it down if that makes the system simpler.
+  - Apply essentialism. Never keep something merely because it already exists. Ask: If rebuilding from scratch, would you add it again?
 
 ## Review
 
