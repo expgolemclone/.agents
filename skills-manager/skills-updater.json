@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "markdown-to-docx": {
+      "repository": "expgolemclone/markdown-to-docx",
+      "ref": "main",
+      "source_path": "",
+      "include": [],
+      "license_path": null
+    }
+  }
+}

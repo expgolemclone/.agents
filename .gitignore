@@ -1,0 +1,23 @@
+*
+
+!.gitignore
+!AGENTS.md
+!AGENTS-plan.md
+!PLAN.md
+!settings.json
+!README.md
+!skills/
+!skills/**
+!skills-manager/
+!skills-manager/**
+!workflow/
+!workflow/**
+
+# Independent repositories manage these skills.
+/skills/smtp-mailer
+/skills/markdown-to-docx/
+
+# Local build and test artifacts.
+**/__pycache__/
+**/*.py[cod]
+**/node_modules/

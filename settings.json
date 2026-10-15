@@ -1,0 +1,6 @@
+{
+  "provider": "openai",
+  "model": "gpt-6.1-sol",
+  "thinkingLevel": "high",
+  "serviceTier": "priority"
+}
