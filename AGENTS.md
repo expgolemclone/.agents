@@ -3,7 +3,7 @@
 ## General
 
 - User instructions and repository-specific rules take precedence over this file when they conflict.
-- Use English for context reasons.
+- Use English.
 - Quote `@` in PowerShell commands.
 
 - Full-width punctuation is prohibited.
