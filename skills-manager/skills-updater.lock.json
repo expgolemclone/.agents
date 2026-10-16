@@ -2,8 +2,8 @@
   "schema_version": 1,
   "sources": {
     "markdown-to-docx": {
-      "commit": "4391d8a211cdfb38b0d53044f90b4d5eaa60d375",
-      "content_sha256": "75a77b1fabceff054ba116799e9982ee9eec1684107fd7483fcf07fe38939d32",
+      "commit": "167c8b5bb2a3f3aa710c1507c878569227f5ccd1",
+      "content_sha256": "b039b52025839cb4279750c92bd3d5456a102c04012926830c2cfcac617edd31",
       "ref": "main",
       "repository": "expgolemclone/markdown-to-docx",
       "source_path": ""
