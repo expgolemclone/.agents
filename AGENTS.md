@@ -44,6 +44,7 @@ What matters is achieving the goal, not reasoning exactly as the user instructed
 > We'll accept to fight the complexity when it's worthwhile but we'll try hard to recognize when a small feature is not worth 1000s of lines of code.
 > Most of the time the best way to fight complexity is by not creating it at all.
 
+- Group related files into folders.
 - Duplicate management, duplicate implementations, inconsistent terminology, fallbacks, and overrides are prohibited.
 - Keep documentation as short as possible. Remove redundancy and link to authoritative sources instead of repeating them.
 - Do not duplicate code specifications in documentation. Add such documentation only when explicitly requested.
