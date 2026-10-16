@@ -2,6 +2,7 @@
 
 !.gitignore
 !AGENTS.md
+!RULES.md
 !AGENTS-plan.md
 !PLAN.md
 !settings.json

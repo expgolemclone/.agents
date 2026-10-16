@@ -21,9 +21,7 @@
 - Identify the target using `Read-LocalRepositoryMap` from
   `$HOME/local-repository-map/RepositoryMap.psm1`.
 
-- Read the relevant `RULES.md` and `SKILL.md` files.
-  - Shared skills belong in `$HOME/.agents/skills/`.
-    Repository-specific skills belong in the target repository.
+- Read `$HOME/.agents/RULES.md` and the relevant `RULES.md` and `SKILL.md` files.
 
 - Follow `expgolemclone/envx/RULES.md` regardless of programming language.
 
@@ -46,8 +44,7 @@ What matters is achieving the goal, not reasoning exactly as the user instructed
 
 - Group related files into folders.
 - Duplicate management, duplicate implementations, inconsistent terminology, fallbacks, and overrides are prohibited.
-- Keep documentation as short as possible. Remove redundancy and link to authoritative sources instead of repeating them.
-- Do not duplicate code specifications in documentation. Add such documentation only when explicitly requested.
+- Do not add documentation. Cut it.
 
 - Do not cling to backward compatibility. Delete first.
   - Do not preserve the existing design through minimal changes. Tear it down if that makes the system simpler.
@@ -71,12 +68,9 @@ What matters is achieving the goal, not reasoning exactly as the user instructed
   and follow `Get-AgentWorkflowHelp`.
   Read the code in `workflow/` only when investigating problems.
 
-- When the user enters `handoff`, regardless of whether they have entered `do`, publish the current code and updated PLAN through the workflow, release ownership, and report the task ID.
+- Follow `$HOME/.agents/workflow/HANDOFF.md` for bookmark restrictions and handoff.
 
 ## Constraints
-
-- The only permitted local and remote bookmarks are `main` and `handoff/*` for unfinished tasks.
-  Ask before changing any others.
 
 - Do not push to repositories outside expgolemclone.
   For repositories without a remote, work serially at the registered path.
