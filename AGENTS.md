@@ -42,6 +42,7 @@ What matters is achieving the goal, not reasoning exactly as the user instructed
 > We'll accept to fight the complexity when it's worthwhile but we'll try hard to recognize when a small feature is not worth 1000s of lines of code.
 > Most of the time the best way to fight complexity is by not creating it at all.
 
+- Apply ECRS: Eliminate, Combine, Rearrange, Simplify.
 - Group related files into folders.
 - Duplicate management, duplicate implementations, inconsistent terminology, fallbacks, and overrides are prohibited.
 - Do not add documentation. Cut it.
